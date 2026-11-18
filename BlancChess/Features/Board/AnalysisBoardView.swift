@@ -8,6 +8,8 @@ struct AnalysisBoardView: View {
     @EnvironmentObject var progress: ProgressStore
     @StateObject private var model: BoardModel
     @State private var sheet: BoardSheet?
+    @State private var onScreen = false
+    @Environment(\.tabVisible) private var tabVisible
 
     enum BoardSheet: String, Identifiable {
         case explorer, setup, botStart, gameOver
@@ -43,11 +45,21 @@ struct AnalysisBoardView: View {
         .background(Spotlight(colour: BC.violet))
         .sheet(item: $sheet) { s in sheetView(s) }
         .onAppear {
+            onScreen = true
             model.configure(settings: progress.settings, book: app.book, reps: app.repertoires)
-            model.resume()
+            if tabVisible { model.resume() }
         }
-        .onDisappear { model.pause() }
+        .onDisappear {
+            onScreen = false
+            model.pause()
+        }
+        // Tabs stay alive when you switch away: stop thinking while this one is behind another.
+        .onChange(of: tabVisible) { _, visible in
+            guard onScreen else { return }
+            if visible { model.resume() } else { model.pause() }
+        }
         .onChange(of: progress.settings) { _, s in model.configure(settings: s, book: app.book, reps: app.repertoires) }
+        .onChange(of: app.book != nil) { _, _ in model.configure(settings: progress.settings, book: app.book, reps: app.repertoires) }
         .onChange(of: model.gameOverCount) { _, _ in
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 900_000_000)

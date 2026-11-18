@@ -7,6 +7,9 @@ struct TodayView: View {
     @EnvironmentObject var store: GameStore
     @State private var daily: [Puzzle] = []
     @State private var lead: Lead?
+    @State private var leadKey: LeadKey?
+    @State private var leadAt = Date.distantPast
+    @Environment(\.tabVisible) private var tabVisible
 
     /// The first move today's session asks for, shown on the card.
     struct Lead { let fen: String; let flipped: Bool; let arrow: MovePair?; let title: String; let last: [String]; let history: [String] }
@@ -16,15 +19,18 @@ struct TodayView: View {
     var body: some View {
         let plan = SessionPlan(app: app, progress: progress, daily: daily)
         GeometryReader { geo in
+            // Small phones (iPhone SE): tighter spacing and a smaller board so everything fits above the dock.
+            // It still scrolls if anything ever doesn't fit.
+            let compact = geo.size.height < 700
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: compact ? 14 : 24) {
                     greetingRow.arrive(0)
                     pills.arrive(1)
                     heroCard(plan, board: boardSize(geo.size)).arrive(2)
                     tiles(plan).arrive(3)
                 }
                 .padding(.horizontal, BC.side)
-                .padding(.top, 22)
+                .padding(.top, compact ? 8 : 22)
                 .padding(.bottom, BC.dockClearance + 12)
                 .readableColumn()
             }
@@ -33,8 +39,29 @@ struct TodayView: View {
             .scrollBounceBehavior(.basedOnSize)
         }
         .background(Spotlight(colour: BC.amber))
-        .task(id: store.revision) { await refresh() }
-        .task(id: progress.version) { lead = Self.lead(app) }
+        .task(id: visible ? store.revision : -1) { if visible { await refresh() } }
+        .task(id: LeadKey(version: progress.version, reps: app.repertoires.map(\.id), visible: visible)) { await updateLead() }
+    }
+
+    /// Today is on screen: its tab is in front with nothing pushed over it.
+    private var visible: Bool { tabVisible && (app.paths[.today] ?? []).isEmpty }
+
+    private struct LeadKey: Equatable { let version: Int; let reps: [String]; let visible: Bool }
+
+    /// The lead builds a whole practice session: only while Today shows, and not on every answer
+    /// (progress changes many times a minute while you practise).
+    private func updateLead() async {
+        guard visible else { return }
+        let key = LeadKey(version: progress.version, reps: app.repertoires.map(\.id), visible: true)
+        // Due dates pass with time too: coming back to Today after a while works it out again.
+        guard key != leadKey || Date().timeIntervalSince(leadAt) > 60 else { return }
+        if leadKey != nil {
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if Task.isCancelled { return }
+        }
+        leadKey = key
+        leadAt = Date()
+        lead = Self.lead(app)
     }
 
     /// Today's positions are worked out after the first frame, cached on the review revision.
@@ -151,7 +178,7 @@ struct TodayView: View {
     /// its safe area (the clock and home indicator), so Split View and Stage Manager size it right too.
     private func boardSize(_ space: CGSize) -> CGFloat {
         let column = min(space.width, BC.readable)
-        return max(170, min(column - 2 * BC.side - 24, space.height - 554))
+        return max(space.height < 700 ? 136 : 170, min(column - 2 * BC.side - 24, space.height - 554))
     }
 
     private func start(_ plan: SessionPlan) {

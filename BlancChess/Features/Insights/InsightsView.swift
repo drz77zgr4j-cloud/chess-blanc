@@ -10,11 +10,19 @@ struct InsightsView: View {
     @State private var data: InsightsData?
     @State private var ratingClass: String? = nil
     @State private var allOpenings = false
+    @State private var cache = InsightsCache()
+    @State private var dataRevision = -1
+    @Environment(\.tabVisible) private var tabVisible
 
     private var linked: Bool { progress.settings.linked }
 
     var body: some View {
-        let reviewed = store.reviewed.count
+        cache.refresh(store)
+        let reviewed = cache.reviewedCount
+        return content(reviewed: reviewed)
+    }
+
+    private func content(reviewed: Int) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 TabHeader(title: "Insights")
@@ -46,9 +54,14 @@ struct InsightsView: View {
         .scrollIndicators(.hidden)
         .topFade()
         .background(Spotlight(colour: BC.coral))
-        .task(id: store.revision) {
+        // Worked out while Insights is in front (again on coming back if the games changed meanwhile).
+        .task(id: tabVisible ? store.revision : -1) {
+            guard tabVisible, dataRevision != store.revision else { return }
+            let revision = store.revision
             let snap = await TrainingCache.shared.snapshot(store, app.repertoires)
-            let d = InsightsData(snapshot: snap, reviewed: store.reviewed)
+            cache.refresh(store)
+            let d = InsightsData(snapshot: snap, reviewed: cache.reviewed)
+            dataRevision = revision
             withAnimation(BC.curve(0.3)) { data = d }
         }
     }
@@ -69,11 +82,11 @@ struct InsightsView: View {
 
     private func current(_ tc: String) -> Int? {
         let s: ChessCom.Stats.Mode? = tc == "rapid" ? store.stats?.chess_rapid : tc == "blitz" ? store.stats?.chess_blitz : store.stats?.chess_bullet
-        return s?.last?.rating ?? store.ratingHistory(tc).last?.1
+        return s?.last?.rating ?? cache.history(tc).last?.1
     }
 
     private func ratingCard(_ tc: String) -> some View {
-        let history = store.ratingHistory(tc)
+        let history = cache.history(tc)
         let change = history.count > 1 ? (current(tc) ?? history.last!.1) - history.first!.1 : nil
         let on = ratingClass == tc
         return Button {
@@ -97,7 +110,7 @@ struct InsightsView: View {
     }
 
     private func ratingChart(_ tc: String) -> some View {
-        let h = store.ratingHistory(tc)
+        let h = cache.history(tc)
         let lo = (h.map(\.1).min() ?? 0), hi = (h.map(\.1).max() ?? 0)
         return CardBox(padding: 14) {
             VStack(alignment: .leading, spacing: 8) {
@@ -142,20 +155,24 @@ struct InsightsView: View {
                 let s = progress.settings
                 Task { await store.sync(user: s.chessComUser, months: s.historyMonths, autoReview: s.autoReview) }
             }
-        } else if store.pendingReviews > 0 {
-            CardBox {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Reviewing your games").font(.bcCardTitle).foregroundStyle(BC.ink)
-                    Text("Stockfish is going through them one by one. Your insights appear as soon as the first ones are done.")
-                        .font(.bcBody).foregroundStyle(BC.mute).fixedSize(horizontal: false, vertical: true)
-                    ProgressBar(value: store.reviewProgress, colour: BC.violet, height: 6).padding(.top, 4)
-                    Text("\(store.pendingReviews) in the queue").font(.bcCaption).foregroundStyle(BC.mute)
-                }
-            }
         } else {
-            EmptyCard(title: "Review your games", message: "\(store.unreviewed.count) games are waiting. Stockfish reviews them in the background.",
-                      actionTitle: "Review my games") {
-                store.enqueueReviews(store.unreviewed.prefix(40).map(\.id))
+            ReviewStatusReader(status: store.live) { live in
+                if live.pending > 0 {
+                    CardBox {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Reviewing your games").font(.bcCardTitle).foregroundStyle(BC.ink)
+                            Text("Stockfish is going through them one by one. Your insights appear as soon as the first ones are done.")
+                                .font(.bcBody).foregroundStyle(BC.mute).fixedSize(horizontal: false, vertical: true)
+                            ProgressBar(value: live.progress, colour: BC.violet, height: 6).padding(.top, 4)
+                            Text("\(live.pending) in the queue").font(.bcCaption).foregroundStyle(BC.mute)
+                        }
+                    }
+                } else {
+                    EmptyCard(title: "Review your games", message: "\(cache.unreviewedCount) games are waiting. Stockfish reviews them in the background.",
+                              actionTitle: "Review my games") {
+                        store.enqueueReviews(store.unreviewed.prefix(40).map(\.id))
+                    }
+                }
             }
         }
     }
@@ -186,7 +203,7 @@ struct InsightsView: View {
 
     @ViewBuilder
     private func weaknesses(_ d: InsightsData) -> some View {
-        SectionBox(title: "Where you lose points · \(store.reviewed.count) games") {
+        SectionBox(title: "Where you lose points · \(cache.reviewedCount) games") {
             if d.weaknesses.isEmpty {
                 CardBox { Text("Nothing costs you points twice yet. Review more games for a clearer picture.").font(.bcBody).foregroundStyle(BC.mute) }
             } else {
@@ -420,4 +437,28 @@ struct InsightsData {
         openings = s.openings
         spots = s.openingNodes
     }
+}
+
+/// The cheap-but-not-free numbers Insights reads on every redraw (reviewed games, rating histories),
+/// worked out once per store revision instead of in `body`.
+@MainActor
+final class InsightsCache {
+    private var key: (Int, Int) = (-1, -1)
+    private(set) var reviewed: [GameRecord] = []
+    private(set) var unreviewedCount = 0
+    private var histories: [String: [(Date, Int)]] = [:]
+
+    var reviewedCount: Int { reviewed.count }
+
+    func refresh(_ store: GameStore) {
+        guard key != (store.revision, store.games.count) else { return }
+        key = (store.revision, store.games.count)
+        reviewed = store.reviewed
+        unreviewedCount = store.games.count - reviewed.count
+        histories = [:]
+        for tc in ["rapid", "blitz", "bullet"] { histories[tc] = store.ratingHistory(tc) }
+    }
+
+    /// Your rating over time in one speed, oldest first (GameStore.ratingHistory, cached).
+    func history(_ timeClass: String) -> [(Date, Int)] { histories[timeClass] ?? [] }
 }

@@ -17,7 +17,7 @@ struct GameReview: Codable, Hashable {
     var themes: [Eval.Theme?]? = nil
     /// The square a theme is about (the hanging piece, say).
     var squares: [String?]? = nil
-    /// 2 = chess.com Classification V2 rules. Older reviews get redone.
+    /// 2 = the current classification rules. Older reviews get redone.
     var version: Int? = nil
 
     static let currentVersion = 2
@@ -51,7 +51,7 @@ struct GameRecord: Codable, Identifiable, Hashable {
     var userRating: Int { userColor == .white ? whiteRating : blackRating }
     var userAccuracy: Double? {
         if let r = review { return userColor == .white ? r.accuracyWhite : r.accuracyBlack }
-        return chessComAccuracy
+        return nil      // only our own review's figure: chess.com's number isn't ours to show
     }
 
     /// FEN before each ply, plus the final position.

@@ -49,7 +49,7 @@ private struct PracticeScreen: View {
         }
         .background(Spotlight(colour: BC.blue, strength: 0.28))
         .onAppear {
-            guard !started else { return }
+            guard !started else { session.resume(); return }
             started = true
             session.begin()
         }
@@ -273,15 +273,23 @@ private struct PracticeScreen: View {
                 EmptyCard(title: Allowance.newLines.headline, message: "Revise what you know, or go unlimited with Pro.")
                 BlockButton(title: "Go unlimited", systemImage: "sparkles") { Pro.shared.paywall = .newLines }
             } else {
-                EmptyCard(title: "Nothing due here", message: "Learn new moves or test yourself on what you know.")
+                if session.knowsAnything {
+                    EmptyCard(title: "Nothing due here", message: "Learn new moves or test yourself on what you know.")
+                } else {
+                    EmptyCard(title: "Nothing learned yet", message: "Learn your first moves. They come back here to revise.")
+                }
             }
             if session.canLearnMore && !session.limitReached {
                 BlockButton(title: "Learn new moves", systemImage: "sparkles") {
                     session.build(mode: .learn); session.begin()
                 }
             }
-            SecondaryButton(title: "Revise what I know", systemImage: "shuffle") {
-                session.build(mode: .revise); session.begin()
+            if session.knowsAnything {
+                SecondaryButton(title: "Revise what I know", systemImage: "shuffle") {
+                    session.build(mode: .revise); session.begin()
+                }
+            } else if !session.canLearnMore {
+                EmptyCard(title: "Start with new moves", message: "Pick an opening in Openings and learn its first lines.")
             }
             Spacer()
         }

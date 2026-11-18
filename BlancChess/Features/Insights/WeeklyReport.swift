@@ -66,6 +66,26 @@ struct WeekStats {
     }
 }
 
+/// `WeekStats.pair`, worked out again only when the games or your practice change (or a minute passes),
+/// not on every redraw.
+@MainActor
+final class WeekCache {
+    private struct Key: Equatable { let revision: Int; let games: Int; let progress: Int }
+    private var key: Key?
+    private var at = Date.distantPast
+    private var value: (this: WeekStats, last: WeekStats)?
+
+    func pair(_ store: GameStore, _ progress: ProgressStore) -> (this: WeekStats, last: WeekStats) {
+        let k = Key(revision: store.revision, games: store.games.count, progress: progress.version)
+        if let value, k == key, Date().timeIntervalSince(at) < 60 { return value }
+        let v = WeekStats.pair(store.games, progress)
+        key = k
+        at = Date()
+        value = v
+        return v
+    }
+}
+
 /// "+3.1" in mint when it's better, coral when worse.
 private struct Delta: View {
     let now: Double?
@@ -89,9 +109,10 @@ struct WeeklyCard: View {
     @EnvironmentObject var app: AppModel
     @EnvironmentObject var store: GameStore
     @EnvironmentObject var progress: ProgressStore
+    @State private var week = WeekCache()
 
     var body: some View {
-        let (w, l) = WeekStats.pair(store.games, progress)
+        let (w, l) = week.pair(store, progress)
         Button { Feel.tick(); app.open(.weeklyReport) } label: {
             CardBox {
                 VStack(alignment: .leading, spacing: 12) {
@@ -133,9 +154,10 @@ struct WeeklyReportView: View {
     @EnvironmentObject var store: GameStore
     @EnvironmentObject var progress: ProgressStore
     @State private var focus: Weakness?
+    @State private var week = WeekCache()
 
     var body: some View {
-        let (w, l) = WeekStats.pair(store.games, progress)
+        let (w, l) = week.pair(store, progress)
         VStack(spacing: 0) {
             NavBar(title: "This week", subtitle: range(w))
             ScrollView {

@@ -16,13 +16,16 @@ struct BlancChessApp: App {
                 .task { await Pro.shared.start() }
                 .task {
                     await app.load()
+                    // Sounds and haptics get ready once the first screen is up (they load on first use before that).
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    Feel.prepare()
                     // Let the first screen settle before Stockfish loads its networks.
-                    try? await Task.sleep(nanoseconds: 1_200_000_000)
+                    try? await Task.sleep(nanoseconds: 950_000_000)
                     await EngineService.shared.prepare()
                     let s = app.progress.settings
                     if s.linked {
                         await app.games.sync(user: s.chessComUser, months: s.historyMonths, autoReview: s.autoReview)
-                        if s.autoReview { app.games.enqueueReviews(app.games.unreviewed.prefix(40).map(\.id)) }
+                        if s.autoReview { app.games.enqueueReviews(app.games.unreviewed.prefix(10).map(\.id)) }
                     }
                 }
         }
@@ -34,17 +37,28 @@ struct RootView: View {
     @EnvironmentObject var progress: ProgressStore
     @ObservedObject private var pro = Pro.shared
     @Environment(\.scenePhase) private var phase
+    @State private var onboarding = false
+    /// Tabs opened so far. They stay alive (their screens, scroll and state) when you switch away.
+    @State private var visited: Set<Tab> = []
 
     var body: some View {
         ZStack(alignment: .bottom) {
             if app.loaded {
                 ZStack {
                     ForEach(Tab.allCases, id: \.self) { tab in
-                        if tab == app.tab {
-                            stack(tab).transition(.opacity.animation(.easeOut(duration: 0.12)))
+                        if tab == app.tab || visited.contains(tab) {
+                            let on = tab == app.tab
+                            stack(tab)
+                                .environment(\.tabVisible, on)
+                                .animation(.easeOut(duration: 0.12)) { $0.opacity(on ? 1 : 0) }
+                                .allowsHitTesting(on)
+                                .accessibilityHidden(!on)
+                                .zIndex(on ? 1 : 0)
+                                .transition(.opacity.animation(.easeOut(duration: 0.12)))
                         }
                     }
                 }
+                .onChange(of: app.tab, initial: true) { _, t in visited.insert(t) }
                 if (app.paths[app.tab] ?? []).isEmpty { Dock().transition(.move(edge: .bottom).combined(with: .opacity)) }
             } else {
                 LaunchCover()
@@ -54,9 +68,23 @@ struct RootView: View {
         .sheet(item: $pro.paywall) { reason in
             PaywallView(reason: reason).presentationDetents([.large])
         }
+        // First launch only, once saved settings are in (so anyone already set up never sees it).
+        .onChange(of: app.loaded, initial: true) { _, loaded in
+            if loaded && OnboardingView.needed(progress.settings) { onboarding = true }
+        }
+        .fullScreenCover(isPresented: $onboarding) {
+            OnboardingView { onboarding = false }
+                .environmentObject(app).environmentObject(progress).environmentObject(app.games)
+        }
         .animation(BC.curve(0.3), value: (app.paths[app.tab] ?? []).isEmpty)
         // Back from playing on chess.com: fetch the new games (at most once a minute).
         .onChange(of: phase) { _, p in
+            // Background reviews pause while the app isn't in front; unsaved work is written now.
+            ReviewGate.shared.appActive = p == .active
+            if p != .active {
+                progress.flush()
+                app.games.flush()
+            }
             let s = progress.settings
             guard p == .active, app.loaded, s.linked,
                   Date().timeIntervalSince(app.games.lastSync ?? .distantPast) > 60 else { return }
@@ -113,6 +141,11 @@ struct RootView: View {
         case .linkLichess: LichessLinkView()
         }
     }
+}
+
+extension EnvironmentValues {
+    /// False for a tab kept alive behind the one you're on: it should stop ongoing work (engine analysis).
+    @Entry var tabVisible = true
 }
 
 /// The floating dock: a 64 tall glass capsule of five symbols, no words (BNShellTabBar).

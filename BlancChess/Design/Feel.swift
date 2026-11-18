@@ -16,7 +16,8 @@ enum Feel {
     private static var turn: [String: Int] = [:]
     private static var ready = false
 
-    /// Call once at launch: prepares generators and audio so the first feedback is instant.
+    /// Called just after launch (after the first frame): prepares generators and audio so feedback is instant.
+    /// A sound asked for before that prepares it on the spot.
     static func prepare() {
         guard !ready else { return }
         ready = true
@@ -34,7 +35,9 @@ enum Feel {
     }
 
     private static func play(_ name: String, volume: Float = 1) {
-        guard soundOn, let list = players[name], !list.isEmpty else { return }
+        guard soundOn else { return }
+        if !ready { prepare() }
+        guard let list = players[name], !list.isEmpty else { return }
         let i = (turn[name] ?? 0) % list.count
         turn[name] = i + 1
         let p = list[i]

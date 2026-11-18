@@ -6,6 +6,9 @@ struct SettingsView: View {
     @EnvironmentObject var store: GameStore
     @State private var confirmReset = false
     @State private var toast: Toast?
+    @State private var manageSubscription = false
+    @State private var showLicences = false
+    @State private var redeemCode = false
     @ObservedObject private var pro = Pro.shared
 
     var body: some View {
@@ -83,6 +86,13 @@ struct SettingsView: View {
                                 about("Engine", "Stockfish 17. Free software under the GNU GPL v3.")
                                 about("Your games", "Read from chess.com's and Lichess's public APIs. Nothing is ever posted.")
                                 about("Pieces", PieceSet.all.map { "\($0.name): \($0.credit)" }.joined(separator: "\n"))
+                                Text("Chess Blanc is not affiliated with, or endorsed by, Chess.com, Lichess or the Stockfish project.")
+                                    .font(.bcCaption).foregroundStyle(BC.mute).fixedSize(horizontal: false, vertical: true)
+                                Text("Chess Blanc © 2026 Blanc Works Ltd. Free software under the GNU GPL v3: you may copy, change and share it under that licence. It comes with absolutely no warranty.")
+                                    .font(.bcCaption).foregroundStyle(BC.mute).fixedSize(horizontal: false, vertical: true)
+                                Button { Feel.tick(); showLicences = true } label: {
+                                    Text("Open-source licences").font(.system(size: 13, weight: .semibold)).foregroundStyle(BC.blue)
+                                }
                                 LegalLinks().padding(.top, 4)
                                 Text("Chess Blanc \(version)").font(.bcCaption).foregroundStyle(BC.faint).padding(.top, 2)
                             }
@@ -95,6 +105,10 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
         }
         .background(Spotlight(colour: app.tab.light))
+        .manageSubscriptionsSheet(isPresented: $manageSubscription)
+        .sheet(isPresented: $showLicences) { LicencesView() }
+        // Apple's own offer-code sheet: codes made in App Store Connect (gifts, promotions) turn Pro on.
+        .offerCodeRedemption(isPresented: $redeemCode) { _ in Task { await Pro.shared.refresh() } }
         .toast($toast)
         .confirmationDialog("Reset training progress?", isPresented: $confirmReset, titleVisibility: .visible) {
             Button("Reset progress", role: .destructive) {
@@ -140,10 +154,17 @@ struct SettingsView: View {
                 }
                 if pro.isPro {
                     Text("No daily limits. Every board and piece set.").font(.bcCaption).foregroundStyle(BC.mute)
+                    if pro.subscribed {
+                        SecondaryButton(title: "Manage subscription", systemImage: "creditcard", height: 46) { manageSubscription = true }
+                    }
                 } else {
                     Text("Today: \(pro.left(.newLines)) new lines, \(pro.left(.blunderRounds)) Blunder checks, \(pro.left(.positions)) positions left.")
                         .font(.bcCaption).foregroundStyle(BC.mute).fixedSize(horizontal: false, vertical: true)
                     SecondaryButton(title: "See Pro", systemImage: "sparkles", height: 46) { pro.paywall = .general }
+                    Button { Feel.tick(); redeemCode = true } label: {
+                        Text("Have a code? Redeem it").font(.system(size: 13, weight: .semibold)).foregroundStyle(BC.blue)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
                 if pro.developer {
                     Toggle(isOn: $pro.previewFree) {
@@ -406,8 +427,7 @@ struct LinkView: View {
         }
         .confirmationDialog("Unlink \(linked)?", isPresented: $confirmUnlink, titleVisibility: .visible) {
             Button("Unlink and remove games", role: .destructive) {
-                store.cancelReviews()
-                store.removeAll()
+                store.removeGames(lichess: false)
                 progress.settings.chessComUser = ""
                 found = nil; stats = nil; name = ""
             }
@@ -485,8 +505,7 @@ struct LinkView: View {
     private func link() {
         guard let found else { return }
         if !linked.isEmpty && linked.lowercased() != found.username.lowercased() {
-            store.cancelReviews()
-            store.removeAll()
+            store.removeGames(lichess: false)
         }
         progress.settings.chessComUser = found.username
         Feel.gained()
@@ -568,6 +587,7 @@ struct LichessLinkView: View {
                 }
                 if !progress.settings.lichessUser.isEmpty {
                     QuietButton(title: "Unlink \(progress.settings.lichessUser)", colour: BC.mute) {
+                        store.removeGames(lichess: true)
                         progress.settings.lichessUser = ""
                         dismiss()
                     }
@@ -596,6 +616,32 @@ struct LichessLinkView: View {
             dismiss()
         } catch {
             self.error = "Couldn't reach Lichess. Try again."
+        }
+    }
+}
+
+/// Every open-source licence the app ships under, in full (GPL v3 "Appropriate Legal Notices", MIT, Apache 2.0, CC BY).
+struct LicencesView: View {
+    @Environment(\.dismiss) private var dismiss
+    private let text: String = Bundle.main.url(forResource: "OpenSourceLicences", withExtension: "txt")
+        .flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "The licences are at https://github.com/drz77zgr4j-cloud/chess-blanc"
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(text.components(separatedBy: "\n\n").enumerated()), id: \.offset) { _, para in
+                        Text(para).font(.system(size: 12, design: .monospaced)).foregroundStyle(BC.ink)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(BC.side)
+            }
+            .background(BC.sheet)
+            .navigationTitle("Open-source licences")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
 }

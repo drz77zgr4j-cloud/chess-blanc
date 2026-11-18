@@ -9,6 +9,9 @@ struct OpeningsView: View {
     @State private var showAllPlayed = false
     @State private var showAllLibrary = false
     @State private var spots: [String: TrainingSnapshot.OpeningSpot] = [:]
+    @State private var statsCache = OpeningStatsCache()
+    @State private var spotsRevision = -1
+    @Environment(\.tabVisible) private var tabVisible
 
     private var side: PieceColor { sideRaw == "black" ? .black : .white }
     private var mine: [Repertoire] { app.repertoires.filter { $0.color == side } }
@@ -33,9 +36,12 @@ struct OpeningsView: View {
         .topFade()
         .background(Spotlight(colour: BC.blue))
         .onChange(of: sideRaw) { _, _ in Feel.tick(); showAllPlayed = false; showAllLibrary = false }
-        .task(id: store.revision) {
+        .task(id: tabVisible ? store.revision : -1) {
+            guard tabVisible, spotsRevision != store.revision else { return }
+            let revision = store.revision
             let snap = await TrainingCache.shared.snapshot(store, app.repertoires)
             spots = snap.openingNodes
+            spotsRevision = revision
         }
     }
 
@@ -65,7 +71,7 @@ struct OpeningsView: View {
 
     @ViewBuilder
     private var played: some View {
-        let stats = store.openingStats().filter { $0.color == side }
+        let stats = statsCache.stats(store, side: side)
         let total = max(1, stats.reduce(0) { $0 + $1.games })
         if !stats.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
@@ -259,5 +265,20 @@ struct CoverageRing: View {
         .onAppear { withAnimation(BC.curve(0.8).delay(0.2)) { drawn = true } }
         .accessibilityElement()
         .accessibilityLabel("You'd know your move in \(OpeningText.percent(value)) of real games")
+    }
+}
+
+/// What you play, by opening: worked out once per change to your games, not on every redraw.
+@MainActor
+final class OpeningStatsCache {
+    private var key: (Int, Int) = (-1, -1)
+    private var all: [GameStore.OpeningStat] = []
+
+    func stats(_ store: GameStore, side: PieceColor) -> [GameStore.OpeningStat] {
+        if key != (store.revision, store.games.count) {
+            key = (store.revision, store.games.count)
+            all = store.openingStats()
+        }
+        return all.filter { $0.color == side }
     }
 }

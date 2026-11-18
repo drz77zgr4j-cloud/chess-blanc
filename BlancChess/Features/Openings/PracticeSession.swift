@@ -83,6 +83,12 @@ final class PracticeSession: ObservableObject {
         return line.steps.prefix(index).last { $0.mover == line.rep.color }
     }
     var whyFEN: String? { whyNode?.fenBefore }
+    /// Has anything in these openings been learned yet (so there's something to revise)?
+    var knowsAnything: Bool {
+        let under = request.nodeID ?? ""
+        return reps.contains { rep in rep.myMoves(under: under).contains { progress.memory(rep, $0).level > 0 } }
+    }
+
     var canLearnMore: Bool {
         let under = request.nodeID ?? ""
         return reps.contains { rep in rep.myMoves(under: under).contains { progress.memory(rep, $0).level == 0 } }
@@ -352,9 +358,26 @@ final class PracticeSession: ObservableObject {
     }
 
     func stop() {
+        stopped = task != nil
         task?.cancel()
         task = nil
     }
+
+    /// Back on screen (after Analyse or "Why?"): whatever was mid-way (the opponent's reply, the replay
+    /// before "Now from memory", saving a finished line) picks up again, so the board never freezes.
+    func resume() {
+        guard stopped else { return }
+        stopped = false
+        guard phase == .playing, !waiting, !lineDone, let line, lines.indices.contains(current) else { return }
+        if index >= line.steps.count {
+            run { [weak self] in await self?.lineFinished() }
+        } else if index < line.start || pass == .recall && index == line.start {
+            startLine(current, pass: pass, slide: false)
+        } else {
+            run { [weak self] in await self?.advance() }
+        }
+    }
+    private var stopped = false
 
     private func startLine(_ i: Int, pass: Pass, slide: Bool) {
         task?.cancel()

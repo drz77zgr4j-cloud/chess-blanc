@@ -23,19 +23,19 @@ enum BC {
     static let violet = Color(hex: 0x8C7BFF)  // analysis / the engine
     static let gold = Color(hex: 0xF5C542)
 
-    // Move marks (chess.com's language, our tones)
-    static let teal = Color(hex: 0x26C2A3)    // brilliant
-    static let great = Color(hex: 0x5C8BB0)   // great
-    static let best = Color(hex: 0x81B64C)    // best
-    static let excellent = Color(hex: 0x96BC4B)
-    static let good = Color(hex: 0x97AF8B)
-    static let book = Color(hex: 0xA88865)
-    static let inaccuracy = Color(hex: 0xF7C045)
-    static let mistake = Color(hex: 0xFFA459)
-    static let miss = Color(hex: 0xFF7769)
-    static let blunder = Color(hex: 0xFA412D)
+    // Move marks: standard chess annotation, in Chess Blanc's own tones
+    static let teal = Color(hex: 0x3DD9C1)    // brilliant
+    static let great = Color(hex: 0x5EB8FF)   // only move
+    static let best = Color(hex: 0x6FD48A)    // best
+    static let excellent = Color(hex: 0x9ED67A)
+    static let good = Color(hex: 0xA9B8A0)
+    static let book = Color(hex: 0xB79C7E)
+    static let inaccuracy = Color(hex: 0xFFD166)
+    static let mistake = Color(hex: 0xFF9F5A)
+    static let miss = Color(hex: 0xFF7A8A)
+    static let blunder = Color(hex: 0xFF4D4D)
 
-    // Board: chess.com-style brown
+    // Board
     static var lightSquare: Color { BoardTheme.current.light }
     static var darkSquare: Color { BoardTheme.current.dark }
     static var lastMove: Color { BoardTheme.current.highlight }
@@ -85,7 +85,7 @@ extension Font {
     static let bcHero = Font.system(size: 36, weight: .bold)
 }
 
-/// chess.com's move marks.
+/// Marks for each move, in standard chess annotation.
 enum MoveClass: String, Codable, CaseIterable, Identifiable {
     case brilliant, great, best, excellent, good, book, inaccuracy, mistake, miss, blunder, forced
     var id: String { rawValue }
@@ -94,13 +94,13 @@ enum MoveClass: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .brilliant: "!!"
         case .great: "!"
-        case .best: "★"
-        case .excellent: "👍"
+        case .best: "◆"
+        case .excellent: "+"
         case .good: "✓"
-        case .book: "📖"
+        case .book: "≡"
         case .inaccuracy: "?!"
         case .mistake: "?"
-        case .miss: "✕"
+        case .miss: "⊘"
         case .blunder: "??"
         case .forced: "→"
         }
@@ -125,14 +125,14 @@ enum MoveClass: String, Codable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .brilliant: "Brilliant"
-        case .great: "Great"
+        case .great: "Only move"
         case .best: "Best"
         case .excellent: "Excellent"
         case .good: "Good"
-        case .book: "Book"
+        case .book: "Theory"
         case .inaccuracy: "Inaccuracy"
         case .mistake: "Mistake"
-        case .miss: "Miss"
+        case .miss: "Missed chance"
         case .blunder: "Blunder"
         case .forced: "Forced"
         }
@@ -142,14 +142,14 @@ enum MoveClass: String, Codable, CaseIterable, Identifiable {
     var phrase: String {
         switch self {
         case .brilliant: "brilliant"
-        case .great: "a great move"
+        case .great: "the only good move"
         case .best: "the best move"
         case .excellent: "excellent"
         case .good: "good"
-        case .book: "a book move"
+        case .book: "opening theory"
         case .inaccuracy: "an inaccuracy"
         case .mistake: "a mistake"
-        case .miss: "a miss"
+        case .miss: "a missed chance"
         case .blunder: "a blunder"
         case .forced: "forced"
         }
@@ -159,7 +159,7 @@ enum MoveClass: String, Codable, CaseIterable, Identifiable {
     var isSlip: Bool { [.inaccuracy, .mistake, .miss, .blunder].contains(self) }
     var isTop: Bool { [.brilliant, .great, .best].contains(self) }
 
-    /// The order chess.com lists them in.
+    /// Best to worst.
     static let reviewOrder: [MoveClass] = [.brilliant, .great, .best, .excellent, .good, .book, .inaccuracy, .mistake, .miss, .blunder]
 }
 
@@ -176,7 +176,7 @@ struct BoardTheme: Identifiable, Equatable {
 
     static let all: [BoardTheme] = [
         BoardTheme(id: "wood", name: "Wood", light: Color(hex: 0xEDD6B0), dark: Color(hex: 0xB88762), highlight: hl(0xF6D23C)),
-        BoardTheme(id: "green", name: "Green", light: Color(hex: 0xEEEED2), dark: Color(hex: 0x769656), highlight: hl(0xF5F682, 0.8)),
+        BoardTheme(id: "green", name: "Green", light: Color(hex: 0xE9EDD3), dark: Color(hex: 0x6E9455), highlight: hl(0xF5F682, 0.8)),
         BoardTheme(id: "brown", name: "Brown", light: Color(hex: 0xF0D9B5), dark: Color(hex: 0xB58863), highlight: hl(0xCDD26A, 0.85)),
         BoardTheme(id: "blue", name: "Blue", light: Color(hex: 0xDEE3E6), dark: Color(hex: 0x8CA2AD), highlight: hl(0x9BC7E8, 0.85)),
         BoardTheme(id: "ice", name: "Ice", light: Color(hex: 0xE8F1F8), dark: Color(hex: 0x7FA3C4), highlight: hl(0xA8E0F0, 0.85)),

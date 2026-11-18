@@ -24,11 +24,11 @@ enum Coach {
             let sac = b.unsafePieces(white: white).compactMap { b.piece($0) }.max { Board64.value($0) < Board64.value($1) }
             return Line(headline: "\(san) is brilliant", detail: "You give up your \(sac.map(Board64.pieceName) ?? "piece"). It's a real sacrifice — and it works.")
         case (.great, _):
-            return Line(headline: "\(san) is a great move", detail: "The only good move here. Everything else gave a lot away.")
+            return Line(headline: "\(san) is the only move", detail: "The only good move here. Everything else gave a lot away.")
         case (.best, _):
             return Line(headline: "\(san) is best", detail: "Exactly what Stockfish would play.")
         case (.book, _):
-            return Line(headline: "\(san) is book", detail: "A well-known opening move.")
+            return Line(headline: "\(san) is theory", detail: "A well-known opening move.")
         case (.forced, _):
             return Line(headline: "\(san) was forced", detail: "The only legal move.")
         case (.excellent, _), (.good, _):
@@ -40,7 +40,7 @@ enum Coach {
         case (_, .missedMate?):
             return Line(headline: head, detail: "You had a forced mate" + (bestSAN.map { " starting with \($0)." } ?? "."))
         case (_, .missedWin?):
-            return Line(headline: "\(san) is a miss", detail: "Your opponent had just slipped." + (bestSAN.map { " \($0) would have punished it." } ?? ""))
+            return Line(headline: "\(san) is a missed chance", detail: "Your opponent had just slipped." + (bestSAN.map { " \($0) would have punished it." } ?? ""))
         case (_, .lostMaterial?):
             return Line(headline: head, detail: "You come out material down" + (reply.map { " after \($0)." } ?? ".") + better)
         default:

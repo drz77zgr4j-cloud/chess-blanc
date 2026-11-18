@@ -202,7 +202,7 @@ struct OpeningMoveStrip: View {
     }
 }
 
-/// Stockfish's verdict on a move, the chess.com way.
+/// Stockfish's verdict on a move.
 struct MoveJudgement {
     let verdict: Eval.Verdict
     let best: [EngineLine]       // MultiPV before the move

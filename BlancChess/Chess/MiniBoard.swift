@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// A small static board for lists and previews. Drawn in one Canvas so long lists stay smooth.
+/// A small static board for lists and previews. Drawn in one Canvas so long lists stay smooth, and only
+/// redrawn when what it shows changes (not every time the list around it updates).
 struct MiniBoard: View {
     let fen: String
     var size: CGFloat = 64
@@ -14,6 +15,24 @@ struct MiniBoard: View {
     var look = BoardLook.current
 
     static let symbolIDs = ["wK", "wQ", "wR", "wB", "wN", "wP", "bK", "bQ", "bR", "bB", "bN", "bP"]
+
+    var body: some View {
+        MiniBoardCanvas(fen: fen, size: size, flipped: flipped, highlight: highlight, arrow: arrow,
+                        arrowColour: arrowColour, radius: radius, look: look)
+            .equatable()
+    }
+}
+
+/// The drawing itself: equal inputs, no redraw.
+private struct MiniBoardCanvas: View, Equatable {
+    let fen: String
+    let size: CGFloat
+    let flipped: Bool
+    let highlight: [String]
+    let arrow: MovePair?
+    let arrowColour: Color
+    let radius: CGFloat
+    let look: String
 
     var body: some View {
         Canvas { ctx, _ in

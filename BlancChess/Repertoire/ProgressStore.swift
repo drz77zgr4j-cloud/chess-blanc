@@ -23,6 +23,32 @@ enum Disk {
         guard let data = try? e.encode(value) else { return }
         try? data.write(to: folder.appendingPathComponent(name), options: .atomic)
     }
+
+    /// One queue for every background write, so an older snapshot can never land after a newer one.
+    private static let writer = DispatchQueue(label: "bc.disk.writer", qos: .utility)
+
+    /// Encodes and writes a snapshot off the main thread, in order with earlier writes, and finishes
+    /// even if the app goes to the background meanwhile.
+    @MainActor
+    static func write<T: Encodable>(_ value: T, _ name: String) {
+        let app = UIApplication.shared
+        let token = BackgroundToken()
+        token.id = app.beginBackgroundTask(withName: "Save " + name) { token.end(app) }
+        writer.async {
+            save(value, name)
+            DispatchQueue.main.async { token.end(app) }
+        }
+    }
+
+    /// The background-time assertion for one write; only touched on the main thread.
+    private final class BackgroundToken: @unchecked Sendable {
+        var id = UIBackgroundTaskIdentifier.invalid
+        @MainActor func end(_ app: UIApplication) {
+            guard id != .invalid else { return }
+            app.endBackgroundTask(id)
+            id = .invalid
+        }
+    }
 }
 
 // MARK: - Settings
@@ -127,8 +153,14 @@ final class ProgressStore: ObservableObject {
     private var countsMemo: [String: (learned: Int, total: Int, due: Int, at: Date)] = [:]
     private var planMemo: (key: String, due: Int, fresh: Int, next: Date?, at: Date)?
     @Published var settings: AppSettings {
-        didSet { Disk.save(settings, "settings-v2.json"); apply() }
+        didSet { settingsUnsaved = true; scheduleSave(); apply() }
     }
+
+    /// Writes are coalesced (an answer a second, a keystroke in a name field) and happen off the main thread;
+    /// the app going to the background or inactive flushes them at once.
+    private var saveTask: Task<Void, Never>?
+    private var dataUnsaved = false
+    private var settingsUnsaved = false
 
     /// The ladder: 4 hours, then 1, 3, 7, 14, 30, 90 days.
     static let ladder: [TimeInterval] = [4 * 3600, 86_400, 3 * 86_400, 7 * 86_400, 14 * 86_400, 30 * 86_400, 90 * 86_400]
@@ -159,7 +191,33 @@ final class ProgressStore: ObservableObject {
         PieceSet.current = PieceSet.named(settings.pieceSet)
     }
 
-    private func save() { Disk.save(data, "training-v2.json") }
+    private func save() {
+        dataUnsaved = true
+        scheduleSave()
+    }
+
+    private func scheduleSave() {
+        saveTask?.cancel()
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.flush()
+        }
+    }
+
+    /// Writes anything unsaved now.
+    func flush() {
+        saveTask?.cancel()
+        saveTask = nil
+        if dataUnsaved {
+            dataUnsaved = false
+            Disk.write(data, "training-v2.json")
+        }
+        if settingsUnsaved {
+            settingsUnsaved = false
+            Disk.write(settings, "settings-v2.json")
+        }
+    }
 
     private func key(_ rep: Repertoire, _ n: RepNode) -> String { rep.id + "|" + n.id }
 

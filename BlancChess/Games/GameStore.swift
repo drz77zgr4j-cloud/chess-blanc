@@ -61,6 +61,43 @@ final class FenCache: @unchecked Sendable {
     }
 }
 
+/// What the background reviewer is doing right now. Kept apart from GameStore so the progress ticks
+/// only redraw the few views that show them (the Games analyse card and row ring, a game's review screen).
+@MainActor
+final class ReviewStatus: ObservableObject {
+    @Published fileprivate(set) var reviewingID: String? = nil
+    @Published fileprivate(set) var progress: Double = 0
+    /// Games still to review, the one in progress included.
+    @Published fileprivate(set) var pending = 0
+}
+
+/// Background reviews pause while the phone needs its battery or is hot, and while the app isn't in front.
+@MainActor
+final class ReviewGate {
+    static let shared = ReviewGate()
+    /// Set by the app from its scene phase.
+    var appActive = true
+
+    var open: Bool {
+        let info = ProcessInfo.processInfo
+        return appActive && !info.isLowPowerModeEnabled && info.thermalState.rawValue < ProcessInfo.ThermalState.serious.rawValue
+    }
+
+    /// Returns once reviewing may go on.
+    func wait() async {
+        while !open && !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+    }
+}
+
+/// A view that redraws with the review status, so its parent doesn't have to.
+struct ReviewStatusReader<Content: View>: View {
+    @ObservedObject var status: ReviewStatus
+    @ViewBuilder let content: (ReviewStatus) -> Content
+    var body: some View { content(status) }
+}
+
 @MainActor
 final class GameStore: ObservableObject {
     /// Games inside the history window. Everything in the app reads these.
@@ -72,14 +109,20 @@ final class GameStore: ObservableObject {
     @Published private(set) var avatar: UIImage? = UIImage(contentsOfFile: Disk.folder.appendingPathComponent("avatar.img").path)
     @Published var status: String? = nil
     @Published private(set) var importing = false
-    @Published private(set) var reviewingID: String? = nil
-    @Published private(set) var reviewProgress: Double = 0
+    /// Live review progress: observe this (not the store) to show it.
+    let live = ReviewStatus()
+    var reviewingID: String? { live.reviewingID }
+    var reviewProgress: Double { live.progress }
     @Published var lastError: String? = nil
     /// When the last sync finished, so coming back to the app syncs again without hammering chess.com.
     private(set) var lastSync: Date?
-    @Published private var reviewQueue: [String] = []
-    /// Bumped whenever reviews change, so derived data can be cached.
+    private var reviewQueue: [String] = [] { didSet { updatePending() } }
+    /// Bumped whenever the games change, so derived data can be cached. While the background reviewer works
+    /// through a queue it is bumped at most every 10 s (and when the queue empties), so the heavy derived data
+    /// (training snapshot, insights) isn't rebuilt after every game.
     @Published private(set) var revision = 0
+    /// Bumped on every change to `games` (each finished review included), for cheap per-row caches.
+    private(set) var gamesVersion = 0
 
     private var all: [GameRecord] = []
     private var reviewTask: Task<Void, Never>?
@@ -116,17 +159,28 @@ final class GameStore: ObservableObject {
         while !loadedFromDisk { try? await Task.sleep(nanoseconds: 50_000_000) }
     }
 
-    /// Encoding happens off the main thread; saves are coalesced.
+    /// Encoding happens off the main thread; saves are coalesced. Reviews finishing one after another wait
+    /// longer (games.json is megabytes): the queue emptying or the app leaving the screen writes it at once.
     private var saveTask: Task<Void, Never>?
-    private func save() {
+    private var unsaved = false
+    private func save(after delay: Double = 0.3) {
         guard loadedFromDisk else { return }
+        unsaved = true
         saveTask?.cancel()
-        let snapshot = all
-        saveTask = Task.detached(priority: .utility) {
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            if Task.isCancelled { return }
-            Disk.save(snapshot, "games.json")
+        saveTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            self?.flush()
         }
+    }
+
+    /// Writes any unsaved games now (in the background, in order with earlier writes).
+    func flush() {
+        saveTask?.cancel()
+        saveTask = nil
+        guard unsaved, loadedFromDisk else { return }
+        unsaved = false
+        Disk.write(all, "games.json")
     }
 
     private func applyWindow() {
@@ -136,6 +190,7 @@ final class GameStore: ObservableObject {
             let cutoff = Date().addingTimeInterval(-Double(windowMonths) * 30.44 * 86_400)
             games = all.filter { $0.endTime >= cutoff }
         }
+        gamesVersion += 1
         revision += 1
     }
 
@@ -148,35 +203,73 @@ final class GameStore: ObservableObject {
     /// Your Lichess username, set by the app; synced alongside chess.com.
     var lichessUser = ""
 
+    /// The sync in flight, and which accounts it is for.
+    private var syncTask: Task<Void, Never>?
+    private var syncKey = ""
+    private var syncGeneration = 0
+
+    /// Fetches new games. The same accounts already syncing: nothing to do. Different accounts (you linked
+    /// or unlinked one meanwhile): the running sync is cancelled and this one runs.
     func sync(user: String, months: Int, autoReview: Bool) async {
         let name = user.trimmingCharacters(in: .whitespaces)
         let li = lichessUser.trimmingCharacters(in: .whitespaces)
-        guard !name.isEmpty || !li.isEmpty, !importing else { return }
+        guard !name.isEmpty || !li.isEmpty else { return }
         // Store screenshots: launched with -noSync, show the games already on the device and fetch nothing.
+        #if targetEnvironment(simulator)
         if ProcessInfo.processInfo.arguments.contains("-noSync") { return }
+        #endif
+        let key = name.lowercased() + "|" + li.lowercased()
+        while let running = syncTask {
+            if syncKey == key { return }
+            running.cancel()
+            await running.value
+        }
+        syncKey = key
+        syncGeneration += 1
+        let generation = syncGeneration
+        let task = Task {
+            await self.runSync(name: name, li: li, months: months, autoReview: autoReview)
+            // Cleared by the task itself, before anyone waiting on it resumes.
+            if self.syncGeneration == generation { self.syncTask = nil }
+        }
+        syncTask = task
+        await task.value
+    }
+
+    /// Stops a sync in flight; whatever it fetched is dropped.
+    private func cancelSync() {
+        syncTask?.cancel()
+    }
+
+    private func runSync(name: String, li: String, months: Int, autoReview: Bool) async {
         importing = true
         await waitForDisk()
         lastError = nil
         defer { importing = false; status = nil }
+        var service = "chess.com"
         do {
             var fresh: [GameRecord] = []
             let known = Set(all.map(\.id))
             if !name.isEmpty {
                 status = "Checking \(name)…"
-                if let s = try? await ChessCom.stats(name) { stats = s; Disk.save(s, "stats.json") }
+                if let s = try? await ChessCom.stats(name), !Task.isCancelled { stats = s; Disk.save(s, "stats.json") }
                 await refreshAvatar(name)
                 fresh += try await ChessCom.games(name, months: months, known: known) { [weak self] msg in self?.status = msg }
             }
             if !li.isEmpty {
+                service = "Lichess"
                 status = "Fetching Lichess games…"
                 let newest = all.filter { $0.id.hasPrefix("li-") }.map(\.endTime).max()
                 let since = newest ?? (months <= 0 ? .distantPast : Calendar.current.date(byAdding: .month, value: -months, to: Date())!)
                 fresh += try await Lichess.games(li, since: since, known: known)
             }
-            all = (fresh + all).sorted { $0.endTime > $1.endTime }
+            // Unlinked (or switched account) while this was fetching: don't bring the old games back.
+            try Task.checkCancellation()
+            let have = Set(all.map(\.id))
+            all = (fresh.filter { !have.contains($0.id) } + all).sorted { $0.endTime > $1.endTime }
             save()
             applyWindow()
-            if autoReview { enqueueReviews(unreviewed.prefix(40).map(\.id)) }
+            if autoReview { enqueueReviews(unreviewed.prefix(10).map(\.id)) }
             lastSync = Date()
         } catch is CancellationError {
             // Left the screen or the app mid-sync: not an error, the next sync picks up from here.
@@ -184,7 +277,7 @@ final class GameStore: ObservableObject {
         } catch let e as ChessCom.Failure {
             lastError = e.errorDescription
         } catch {
-            lastError = "Couldn't reach chess.com. Pull down to try again."
+            lastError = "Couldn't reach \(service). Pull down to try again."
         }
     }
 
@@ -192,23 +285,44 @@ final class GameStore: ObservableObject {
     private func refreshAvatar(_ name: String) async {
         let key = "bc.avatarFetched." + name.lowercased()
         if avatar != nil, let last = UserDefaults.standard.object(forKey: key) as? Date, Date().timeIntervalSince(last) < 86_400 { return }
-        guard let p = try? await ChessCom.profile(name) else { return }
+        guard let p = try? await ChessCom.profile(name), !Task.isCancelled else { return }
         UserDefaults.standard.set(Date(), forKey: key)
         profileName = p.name.flatMap { $0.isEmpty ? nil : $0 }
         UserDefaults.standard.set(profileName, forKey: "bc.profileName")
         let file = Disk.folder.appendingPathComponent("avatar.img")
-        guard let s = p.avatar, let url = URL(string: s),
-              let (data, _) = try? await URLSession.shared.data(from: url),
-              let img = UIImage(data: data) else {
+        guard let s = p.avatar, let url = URL(string: s), Net.trusted(url),
+              let (data, _) = try? await Net.session.data(from: url), data.count < 2_000_000,
+              let img = UIImage(data: data)?.preparingThumbnail(of: CGSize(width: 256, height: 256)) else {
+            if Task.isCancelled { return }
             try? FileManager.default.removeItem(at: file)
             avatar = nil
             return
         }
+        if Task.isCancelled { return }
         try? data.write(to: file, options: .atomic)
         avatar = img
     }
 
+    /// Removes one service's games (Lichess games have ids starting "li-"), keeping the other's.
+    func removeGames(lichess: Bool) {
+        cancelSync()
+        cancelReviews()
+        all.removeAll { $0.id.hasPrefix("li-") == lichess }
+        if !lichess {
+            avatar = nil
+            try? FileManager.default.removeItem(at: Disk.folder.appendingPathComponent("avatar.img"))
+            for k in UserDefaults.standard.dictionaryRepresentation().keys where k.hasPrefix("archivesDone.") {
+                UserDefaults.standard.removeObject(forKey: k)
+            }
+            stats = nil
+        }
+        save()
+        applyWindow()
+    }
+
     func removeAll() {
+        cancelSync()
+        cancelReviews()
         all = []
         avatar = nil
         try? FileManager.default.removeItem(at: Disk.folder.appendingPathComponent("avatar.img"))
@@ -237,30 +351,85 @@ final class GameStore: ObservableObject {
         startReviewing()
     }
 
-    var pendingReviews: Int { reviewQueue.count + (reviewingID == nil ? 0 : 1) }
+    var pendingReviews: Int { live.pending }
     func cancelReviews() { reviewQueue.removeAll() }
+
+    private func updatePending() {
+        let n = reviewQueue.count + (live.reviewingID == nil ? 0 : 1)
+        if live.pending != n { live.pending = n }
+    }
 
     private func startReviewing() {
         guard reviewTask == nil else { return }
         reviewTask = Task { [weak self] in
+            // "Book" moves need the opening book, which loads in the background at launch.
+            for _ in 0..<100 where self?.book == nil { try? await Task.sleep(nanoseconds: 100_000_000) }
             while let self, !self.reviewQueue.isEmpty {
                 let id = self.reviewQueue.removeFirst()
                 guard let game = self.game(id), game.review?.version != GameReview.currentVersion else { continue }
-                self.reviewingID = id
-                self.reviewProgress = 0
+                self.live.reviewingID = id
+                self.live.progress = 0
+                self.updatePending()
                 let bookFlags = self.bookFlags(game)
-                let review = await GameReviewer.review(game, book: bookFlags) { p in self.reviewProgress = p }
-                if let i = self.all.firstIndex(where: { $0.id == id }) {
-                    self.all[i].review = review
-                    self.save()
+                let review = await GameReviewer.review(game, book: bookFlags) { [weak self] p in self?.live.progress = p }
+                if let review {
+                    if let i = self.all.firstIndex(where: { $0.id == id }) {
+                        self.all[i].review = review
+                        self.save(after: 5)
+                    }
+                    if let i = self.games.firstIndex(where: { $0.id == id }) {
+                        self.games[i].review = review
+                        self.gamesVersion += 1
+                    }
                 }
-                if let i = self.games.firstIndex(where: { $0.id == id }) { self.games[i].review = review }
-                self.reviewingID = nil
-                self.revision += 1
-                self.feedPrep(game)
+                self.live.reviewingID = nil
+                self.updatePending()
+                if review != nil {
+                    self.reviewsChanged(queueEmpty: self.reviewQueue.isEmpty)
+                    self.feedPrep(game)
+                } else if !EngineService.shared.usable {
+                    // No engine: stop here rather than spin through the queue.
+                    self.reviewQueue.removeAll()
+                }
             }
-            self?.reviewTask = nil
+            if let self {
+                self.reviewTask = nil
+                self.flush()
+                self.announceReviews()
+            }
         }
+    }
+
+    /// Reviews landed: bump `revision` now if it hasn't been bumped for 10 s, else once those 10 s are up.
+    /// The queue emptying bumps it at once.
+    private var lastReviewBump = Date.distantPast
+    private var bumpTask: Task<Void, Never>?
+    private var reviewsUnannounced = false
+    private func reviewsChanged(queueEmpty: Bool) {
+        reviewsUnannounced = true
+        if queueEmpty { announceReviews(); return }
+        guard bumpTask == nil else { return }
+        let wait = 10 - Date().timeIntervalSince(lastReviewBump)
+        if wait <= 0 { bumpRevision(); return }
+        bumpTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            self.bumpTask = nil
+            if self.reviewsUnannounced { self.bumpRevision() }
+        }
+    }
+
+    /// Any reviews not yet announced: bump `revision` now.
+    private func announceReviews() {
+        bumpTask?.cancel()
+        bumpTask = nil
+        if reviewsUnannounced { bumpRevision() }
+    }
+
+    private func bumpRevision() {
+        reviewsUnannounced = false
+        lastReviewBump = Date()
+        revision += 1
     }
 
     /// Where you left your prep becomes a due move in opening training. Once per game, ever.
@@ -355,10 +524,11 @@ final class GameStore: ObservableObject {
 // MARK: - Reviewer
 
 enum GameReviewer {
-    /// Stockfish with two lines per position, then chess.com's rules. Runs off the main thread; the engine
+    /// Stockfish with two lines per position, then the classification rules. Runs off the main thread; the engine
     /// yields to anything you do yourself.
+    /// nil when the engine isn't working (nothing to save).
     nonisolated static func review(_ game: GameRecord, book: [Bool], depth: Int = 14,
-                                   progress: @escaping @MainActor (Double) -> Void) async -> GameReview {
+                                   progress: @escaping @MainActor (Double) -> Void) async -> GameReview? {
         let fens = FenCache.shared.fens(game)
         let engine = await MainActor.run { EngineService.shared }
         var lines: [[EngineLine]] = []
@@ -371,8 +541,14 @@ enum GameReviewer {
             default:
                 var got: [EngineLine] = []
                 for _ in 0..<6 {
+                    // Paused on Low Power Mode, a hot phone, or the app in the background.
+                    await ReviewGate.shared.wait()
                     got = await engine.analyse(fen: fen, depth: depth, multipv: 2, background: true)
                     if let d = got.first?.depth, d >= depth - 2 { break }
+                }
+                if got.isEmpty {
+                    let working = await engine.usable
+                    if !working { return nil }
                 }
                 lines.append(got)
             }

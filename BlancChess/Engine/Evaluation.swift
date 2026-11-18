@@ -1,10 +1,10 @@
 import Foundation
 
-/// Evaluation maths and chess.com-style move classification (Classification V2, expected points).
+/// Evaluation maths and move classification from expected points (win chance).
 ///
-/// Thresholds are chess.com's published expected-points bands. Brilliant / Great / Miss follow the closest
+/// Thresholds are expected-points bands tuned for club players. Brilliant / Only move / Missed chance follow the closest
 /// open reimplementation (WintrChess): a real piece sacrifice that is the best move and doesn't come from an
-/// already-won position; Great = the only good move; Miss = not punishing the opponent's mistake.
+/// already-won position; only move = the only good move; missed chance = not punishing the opponent's mistake.
 enum Eval {
     /// Win chance 0…100 for White (Lichess model).
     static func whiteWin(cp: Double?, mate: Int?) -> Double {
@@ -127,7 +127,7 @@ enum Eval {
                 v.theme = .positional
             }
         }
-        // chess.com: a blunder loses material or allows mate; otherwise it's a mistake.
+        // A blunder loses material or allows mate; otherwise it's a mistake.
         if v.cls == .blunder, ![.hungPiece, .lostMaterial, .allowedMate, .missedMate].contains(v.theme) {
             v.cls = .mistake
         }

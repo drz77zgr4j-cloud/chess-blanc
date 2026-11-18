@@ -38,6 +38,10 @@ final class Pro: ObservableObject {
     @Published private(set) var product: Product?
     @Published private(set) var trialAvailable = false
     @Published private(set) var busy = false
+    /// The product is being fetched from the App Store.
+    @Published private(set) var loading = false
+    /// Something to tell the buyer (a failed load, a failed or pending purchase, nothing to restore).
+    @Published var notice: String?
     /// A build you installed yourself (Xcode / devicectl), not from the App Store: Pro is on.
     @Published private(set) var developer = false
     /// On a developer build: try the app as a free user.
@@ -62,13 +66,44 @@ final class Pro: ObservableObject {
         #if targetEnvironment(simulator)
         developer = true
         #else
-        // App Store and TestFlight builds carry no provisioning profile; builds installed from a Mac do.
-        developer = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") != nil
+        // Builds installed from a Mac carry a provisioning profile; App Store and TestFlight builds don't.
+        // Belt and braces: if Apple says this copy came from the App Store, TestFlight or App Review (any
+        // sandbox or production App Transaction), it is never a developer build, so the paywall always shows.
+        var fromMac = Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") != nil
+        if fromMac, let result = try? await AppTransaction.shared, case .verified(let t) = result,
+           t.environment == .sandbox || t.environment == .production {
+            fromMac = false
+        }
+        developer = fromMac
         #endif
+        Daily.pruneOldDays()
         await refresh()
-        if let p = try? await Product.products(for: [Self.monthlyID]).first {
-            product = p
-            trialAvailable = await p.subscription?.isEligibleForIntroOffer ?? false
+        await loadProduct()
+    }
+
+    /// Fetches the subscription from the App Store, retrying a few times: the paywall must always end up
+    /// with something to buy, or say clearly that the App Store couldn't be reached (with a retry).
+    func loadProduct() async {
+        guard product == nil, !loading else { return }
+        loading = true
+        defer { loading = false }
+        for attempt in 0..<4 {
+            do {
+                if let p = try await Product.products(for: [Self.monthlyID]).first {
+                    product = p
+                    // Only call it a free trial when the App Store really has one for this buyer.
+                    let eligible = await p.subscription?.isEligibleForIntroOffer ?? false
+                    trialAvailable = eligible && p.subscription?.introductoryOffer?.paymentMode == .freeTrial
+                    notice = nil
+                    return
+                }
+                // The App Store answered but didn't offer the product (not yet live in this region, or a
+                // temporary App Store problem): retry, then say so plainly.
+                notice = "Chess Blanc Pro isn't available from the App Store right now. Try again in a moment."
+            } catch {
+                notice = "Couldn't reach the App Store. Check your connection and try again."
+            }
+            try? await Task.sleep(for: .seconds(Double(attempt + 1)))
         }
     }
 
@@ -81,22 +116,60 @@ final class Pro: ObservableObject {
     }
 
     func purchase() async {
-        guard let product, !busy else { return }
+        guard !busy else { return }
+        if product == nil { await loadProduct() }
+        guard let product else { return }
         busy = true
+        notice = nil
         defer { busy = false }
-        if case .success(let result) = try? await product.purchase(), case .verified(let t) = result {
-            await t.finish()
-            await refresh()
-            if subscribed { Feel.complete(); paywall = nil }
+        do {
+            switch try await product.purchase() {
+            case .success(let result):
+                guard case .verified(let t) = result else {
+                    notice = "The App Store couldn't verify that purchase. Try Restore, or try again."
+                    return
+                }
+                await t.finish()
+                await refresh()
+                if !subscribed { subscribed = t.productID == Self.monthlyID && t.revocationDate == nil }
+                if subscribed { Feel.complete(); paywall = nil }
+            case .pending:
+                notice = "Your purchase is waiting for approval. Pro turns on as soon as it's approved."
+            case .userCancelled:
+                break
+            @unknown default:
+                break
+            }
+        } catch {
+            notice = "The purchase didn't go through: \(error.localizedDescription)"
         }
     }
 
     func restore() async {
         busy = true
+        notice = nil
         defer { busy = false }
-        try? await AppStore.sync()
+        do { try await AppStore.sync() } catch {
+            notice = "Couldn't reach the App Store to restore. Try again in a moment."
+            return
+        }
         await refresh()
-        if subscribed { paywall = nil }
+        if subscribed { Feel.complete(); paywall = nil } else { notice = "No active Chess Blanc Pro subscription was found for this Apple ID." }
+    }
+
+    /// "7 days", "1 week", "1 month": the free trial's length, from the App Store's own offer.
+    var trialLength: String? {
+        guard let offer = product?.subscription?.introductoryOffer, offer.paymentMode == .freeTrial else { return nil }
+        let n = offer.period.value
+        let unit: String
+        switch offer.period.unit {
+        case .day: unit = n == 1 ? "day" : "days"
+        case .week: unit = n == 1 ? "week" : "weeks"
+        case .month: unit = n == 1 ? "month" : "months"
+        case .year: unit = n == 1 ? "year" : "years"
+        @unknown default: unit = "days"
+        }
+        return "\(n) \(unit)"
     }
 
     // MARK: Daily allowance
@@ -121,6 +194,14 @@ final class Pro: ObservableObject {
 
 /// Today's counts, kept per calendar day.
 enum Daily {
+    /// Drops counts from earlier days (called once at launch).
+    static func pruneOldDays() {
+        let keep = "daily.\(today)."
+        for k in UserDefaults.standard.dictionaryRepresentation().keys where k.hasPrefix("daily.") && !k.hasPrefix(keep) {
+            UserDefaults.standard.removeObject(forKey: k)
+        }
+    }
+
     static var today: String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -156,15 +237,29 @@ struct PaywallView: View {
                             .background(BC.amber.opacity(0.14), in: Capsule())
                     }
                     comparison
-                    priceBox
-                    footer
+                    legal
                 }
                 .padding(.horizontal, BC.side)
                 .padding(.top, 8)
-                .padding(.bottom, 24)
+                .padding(.bottom, 16)
                 .readableColumn()
             }
             .scrollIndicators(.hidden)
+            // The price, the button and the links stay on screen at every size (iPad sheets, iPhone SE).
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 10) {
+                    priceBox
+                    links
+                }
+                .padding(.horizontal, BC.side).padding(.top, 14).padding(.bottom, 10)
+                .readableColumn()
+                .frame(maxWidth: .infinity)
+                .background(BC.sheet.ignoresSafeArea(edges: .bottom))
+                .overlay(alignment: .top) {
+                    LinearGradient(colors: [BC.sheet.opacity(0), BC.sheet], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 28).offset(y: -28).allowsHitTesting(false)
+                }
+            }
             HStack {
                 Spacer()
                 Button { dismiss() } label: {
@@ -175,7 +270,7 @@ struct PaywallView: View {
             }
             .padding(.horizontal, BC.side).padding(.top, 14)
         }
-        .onAppear { withAnimation(BC.curve(0.6)) { shown = true } }
+        .onAppear { pro.notice = nil; withAnimation(BC.curve(0.6)) { shown = true } }
         .onChange(of: pro.isPro) { _, on in if on { dismiss() } }
     }
 
@@ -228,7 +323,7 @@ struct PaywallView: View {
             HStack(spacing: 10) {
                 Image(systemName: icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(BC.blue).frame(width: 22)
                 Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(BC.ink)
-                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .lineLimit(1).minimumScaleFactor(0.68)
                 Spacer(minLength: 4)
                 Group {
                     if let free { Text(free).font(.system(size: 13)).foregroundStyle(BC.mute) }
@@ -250,33 +345,57 @@ struct PaywallView: View {
     private var priceBox: some View {
         VStack(spacing: 10) {
             if pro.product != nil {
-                BlockButton(title: pro.trialAvailable ? "Start your free week" : "Get Pro", systemImage: "sparkles",
-                            enabled: !pro.busy) {
+                // The amount billed is the most prominent price on the screen (App Review 3.1.2).
+                Text("\(price) / month")
+                    .font(.system(size: 26, weight: .bold)).foregroundStyle(BC.ink)
+                if pro.trialAvailable, let trial = pro.trialLength {
+                    Text("Free for \(trial), then \(price) every month until you cancel.")
+                        .font(.system(size: 13, weight: .medium)).foregroundStyle(BC.mute)
+                        .multilineTextAlignment(.center)
+                }
+                BlockButton(title: pro.trialAvailable ? "Try it free" : "Subscribe for \(price) / month",
+                            systemImage: "sparkles", enabled: !pro.busy) {
                     Task { await pro.purchase() }
                 }
-                Text(pro.trialAvailable ? "7 days free, then \(price) a month. Cancel any time."
-                                        : "\(price) a month. Cancel any time.")
-                    .font(.system(size: 13, weight: .medium)).foregroundStyle(BC.mute)
+            } else if pro.loading {
+                ProgressView().tint(BC.ink).frame(height: 56)
+                Text("Loading from the App Store…").font(.system(size: 13, weight: .medium)).foregroundStyle(BC.mute)
             } else {
-                BlockButton(title: "Coming soon", systemImage: "sparkles", enabled: false) {}
-                Text("Pro will be \(price) a month, with a free week to try it.")
-                    .font(.system(size: 13, weight: .medium)).foregroundStyle(BC.mute)
+                BlockButton(title: "Try again", systemImage: "arrow.clockwise", enabled: true) {
+                    Task { await pro.loadProduct() }
+                }
             }
+            if let notice = pro.notice {
+                Text(notice)
+                    .font(.system(size: 13, weight: .medium)).foregroundStyle(BC.amber)
+                    .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+            }
+            if pro.busy { ProgressView().tint(BC.mute) }
         }
+        .task { await pro.loadProduct() }
     }
 
-    private var footer: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 18) {
-                Button("Restore") { Task { await pro.restore() } }
-                Link("Terms of Use", destination: Legal.terms)
-                Link("Privacy Policy", destination: Legal.privacy)
-            }
-            .font(.system(size: 13, weight: .semibold)).foregroundStyle(BC.mute)
-            Text("Payment is charged to your Apple ID. The subscription renews monthly unless cancelled at least 24 hours before the period ends; manage it in Settings › Apple ID › Subscriptions.")
-                .font(.system(size: 11)).foregroundStyle(BC.faint).multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+    /// Auto-renewal terms (App Review 3.1.2, UK consumer law), worded for whether a free trial applies.
+    private var legalText: String {
+        if pro.trialAvailable, let trial = pro.trialLength {
+            return "Chess Blanc Pro is an auto-renewing monthly subscription. It's free for \(trial); unless you cancel at least 24 hours before the trial ends, your Apple ID is charged \(price) then and every month after until you cancel. Manage or cancel any time in Settings › your name › Subscriptions."
         }
+        return "Chess Blanc Pro is an auto-renewing monthly subscription. \(price) is charged to your Apple ID when you confirm, and again every month unless you cancel at least 24 hours before the end of the current period. Manage or cancel any time in Settings › your name › Subscriptions."
+    }
+
+    private var links: some View {
+        HStack(spacing: 18) {
+            Button("Restore") { Task { await pro.restore() } }.disabled(pro.busy)
+            Link("Terms of Use", destination: Legal.terms)
+            Link("Privacy Policy", destination: Legal.privacy)
+        }
+        .font(.system(size: 13, weight: .semibold)).foregroundStyle(BC.mute)
+    }
+
+    private var legal: some View {
+        Text(legalText)
+            .font(.system(size: 11)).foregroundStyle(BC.faint).multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

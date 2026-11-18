@@ -45,16 +45,17 @@ enum ChessCom {
     }
 
     private static func get<T: Decodable>(_ url: String, as: T.Type) async throws -> T {
-        guard let u = URL(string: url) else { throw Failure.network("Bad address") }
+        guard let u = URL(string: url), Net.trusted(u) else { throw Failure.network("Bad address") }
         var req = URLRequest(url: u)
-        req.setValue("BlancChess/1.0 (personal training app)", forHTTPHeaderField: "User-Agent")
+        req.setValue(Net.userAgent, forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 30
         // Phones drop connections when you switch apps or change networks: try up to three times.
         var attempt = 0
         while true {
             attempt += 1
             do {
-                let (data, resp) = try await URLSession.shared.data(for: req)
+                let (data, resp) = try await Net.session.data(for: req)
+                guard data.count <= Net.maxBytes else { throw Failure.network("chess.com sent more than the app can read.") }
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
                 if code == 404 { throw Failure.notFound }
                 if (code == 429 || code >= 500), attempt < 3 {
@@ -70,17 +71,24 @@ enum ChessCom {
     }
 
     static func profile(_ user: String) async throws -> Profile {
-        try await get("https://api.chess.com/pub/player/\(user.lowercased())", as: Profile.self)
+        guard let n = Net.username(user) else { throw Failure.notFound }
+        return try await get("https://api.chess.com/pub/player/\(n)", as: Profile.self)
     }
 
     static func stats(_ user: String) async throws -> Stats {
-        try await get("https://api.chess.com/pub/player/\(user.lowercased())/stats", as: Stats.self)
+        guard let n = Net.username(user) else { throw Failure.notFound }
+        return try await get("https://api.chess.com/pub/player/\(n)/stats", as: Stats.self)
     }
+
+    /// The most games one import brings in, newest first: enough for every insight, and safe on memory
+    /// even for players with tens of thousands of games.
+    static let maxGames = 1000
 
     /// Games from the last `months` monthly archives, newest first.
     static func games(_ user: String, months: Int, known: Set<String>,
                       progress: @escaping (String) -> Void) async throws -> [GameRecord] {
-        let list = try await get("https://api.chess.com/pub/player/\(user.lowercased())/games/archives", as: Archives.self)
+        guard let name = Net.username(user) else { throw Failure.notFound }
+        let list = try await get("https://api.chess.com/pub/player/\(name)/games/archives", as: Archives.self)
         // months == 0 means all time. One extra archive covers "the last 30 days" across a month boundary.
         let all = list.archives
         let wanted = months <= 0 ? Array(all) : Array(all.suffix(months + 1))
@@ -91,12 +99,15 @@ enum ChessCom {
         let recent = wanted.filter { !done.contains($0) || latest.contains($0) }
         var out: [GameRecord] = []
         for (i, url) in recent.reversed().enumerated() {
+            if out.count >= maxGames { break }
             await MainActor.run { progress("Fetching month \(i + 1) of \(recent.count)…") }
             let month = try await get(url, as: Month.self)
-            for raw in month.games where (raw.rules ?? "chess") == "chess" && !known.contains(raw.url) {
+            for raw in month.games.sorted(by: { $0.end_time > $1.end_time })
+            where (raw.rules ?? "chess") == "chess" && !known.contains(raw.url) {
+                if out.count >= maxGames { break }
                 if let g = convert(raw, user: user) { out.append(g) }
             }
-            if !latest.contains(url) { done.insert(url) }
+            if !latest.contains(url) && out.count < maxGames { done.insert(url) }
         }
         UserDefaults.standard.set(Array(done), forKey: doneKey)
         return out.sorted { $0.endTime > $1.endTime }
@@ -115,6 +126,8 @@ enum ChessCom {
         }
         let detail = (isWhite ? raw.black : raw.white).result == "win" ? me.result : (isWhite ? raw.black.result : raw.white.result)
         let start = raw.initial_setup.flatMap { $0.isEmpty ? nil : $0 } ?? headers["FEN"] ?? Chess.startFEN
+        // Only positions the engine can safely read: anything malformed is skipped, never stored.
+        guard EngineService.safeFEN(start) != nil else { return nil }
         var fen = start
         var ucis: [String] = []
         var sans: [String] = []

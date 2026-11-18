@@ -205,6 +205,7 @@ enum Chess {
             var file = 0
             for ch in row {
                 if let n = ch.wholeNumberValue { file += n; continue }
+                guard file < 8, r < 8 else { break }
                 let sq = "\(files[file])\(8 - r)"
                 out.append((sq, ch.isUppercase ? .white : .black, ch.uppercased()))
                 file += 1

@@ -153,7 +153,7 @@
   "screen_w": 1200,
   "py": 660,
   "dx": 220,
-  "tag": "Stockfish 17"
+  "tag": "Engine analysis"
  },
  {
   "name": "07-bot",
@@ -231,7 +231,7 @@
   "screen_w": 1200,
   "py": 660,
   "dx": 0,
-  "tag": "Free every day",
+  "tag": "Your own games",
   "ipad_dx": 0
  }
 ]

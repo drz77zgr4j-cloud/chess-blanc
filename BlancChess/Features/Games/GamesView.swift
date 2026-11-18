@@ -35,7 +35,7 @@ struct GamesView: View {
                     } else {
                         ForEach(rows) { r in
                             Button { Feel.tick(); app.open(.game(r.id)) } label: {
-                                GameRowView(info: r, reviewing: store.reviewingID == r.id, progress: store.reviewingID == r.id ? store.reviewProgress : 0)
+                                GameRowView(info: r, live: store.live)
                             }
                             .buttonStyle(PressStyle())
                             .padding(.bottom, 8)
@@ -80,11 +80,18 @@ struct GamesView: View {
 
     @ViewBuilder
     private func analyseCard(_ shown: [GamesCache.Info]) -> some View {
-        let pending = store.pendingReviews
-        let waiting = store.unreviewed
+        // The live part redraws on its own as reviews tick along; the rest only when the games change.
+        let waiting = cache.unreviewed(store: store)
+        ReviewStatusReader(status: store.live) { live in
+            analyseCard(shown, pending: live.pending, ring: live.progress, waiting: waiting)
+        }
+    }
+
+    @ViewBuilder
+    private func analyseCard(_ shown: [GamesCache.Info], pending: Int, ring: Double, waiting: [GameRecord]) -> some View {
         if pending > 0 {
             HStack(spacing: 10) {
-                ProgressRingSmall(value: store.reviewProgress)
+                ProgressRingSmall(value: ring)
                 Text("Analysing · \(pending) left").font(.system(size: 15, weight: .semibold).monospacedDigit()).foregroundStyle(BC.ink)
                 Spacer(minLength: 6)
                 Button("Stop") { Feel.tick(); store.cancelReviews() }.buttonStyle(PillButton())
@@ -246,7 +253,7 @@ enum GameFilter: String, CaseIterable {
         case .wins: "Wins"
         case .losses: "Losses"
         case .brilliant: "!! Brilliant"
-        case .great: "! Great"
+        case .great: "! Only moves"
         case .blunders: "?? Blunders"
         case .white: "As White"
         case .black: "As Black"
@@ -291,10 +298,25 @@ final class GamesCache {
         let timeClass: String
     }
 
-    private var infoKey: (Int, Int) = (-1, -1)
+    private var infoKey = -1
     private var infos: [Info] = []
     private var listKey = ""
     private var list: [Info] = []
+    /// Each game's row, kept until its review changes; all of them are redone once a minute ("5 min ago").
+    private var byID: [String: (stamp: Date?, info: Info)] = [:]
+    private var builtAt = Date.distantPast
+    private var waitingKey = -1
+    private var waiting: [GameRecord] = []
+
+    /// Games not reviewed yet, worked out once per change to the games.
+    @MainActor
+    func unreviewed(store: GameStore) -> [GameRecord] {
+        if waitingKey != store.gamesVersion {
+            waitingKey = store.gamesVersion
+            waiting = store.unreviewed
+        }
+        return waiting
+    }
 
     private static let relative: RelativeDateTimeFormatter = {
         let f = RelativeDateTimeFormatter()
@@ -305,23 +327,20 @@ final class GamesCache {
 
     @MainActor
     func rows(store: GameStore, sort: GameSort, filter: GameFilter, speed: String) -> [Info] {
-        if infoKey != (store.revision, store.games.count) {
-            infoKey = (store.revision, store.games.count)
-            let now = Date()
+        let now = Date()
+        if infoKey != store.gamesVersion || now.timeIntervalSince(builtAt) > 60 {
+            infoKey = store.gamesVersion
+            if now.timeIntervalSince(builtAt) > 60 {
+                byID = [:]
+                builtAt = now
+            }
             infos = store.games.map { g in
-                var b = 0, gr = 0, bl = 0
                 let reviewed = g.review?.version == GameReview.currentVersion
-                if reviewed, let r = g.review {
-                    for (i, c) in r.classes.enumerated() where g.moverAt(i) == g.userColor {
-                        if c == .brilliant { b += 1 } else if c == .great { gr += 1 } else if c == .blunder { bl += 1 }
-                    }
-                }
-                let when = Self.relative.localizedString(for: g.endTime, relativeTo: now)
-                return Info(id: g.id, result: g.result, opponent: g.opponent, rating: g.opponentRating,
-                            line: "\(Self.shortFamily(g.family)) · \(g.timeClass.capitalized) · \(when)",
-                            brilliant: b, great: gr, blunders: bl,
-                            accuracy: reviewed ? g.userAccuracy : g.chessComAccuracy, reviewed: reviewed,
-                            endTime: g.endTime, color: g.userColor, timeClass: g.timeClass)
+                let stamp = reviewed ? g.review?.reviewedAt : nil
+                if let hit = byID[g.id], hit.stamp == stamp { return hit.info }
+                let info = Self.info(g, reviewed: reviewed, now: now)
+                byID[g.id] = (stamp, info)
+                return info
             }
             listKey = ""
         }
@@ -358,6 +377,21 @@ final class GamesCache {
         return list
     }
 
+    private static func info(_ g: GameRecord, reviewed: Bool, now: Date) -> Info {
+        var b = 0, gr = 0, bl = 0
+        if reviewed, let r = g.review {
+            for (i, c) in r.classes.enumerated() where g.moverAt(i) == g.userColor {
+                if c == .brilliant { b += 1 } else if c == .great { gr += 1 } else if c == .blunder { bl += 1 }
+            }
+        }
+        let when = relative.localizedString(for: g.endTime, relativeTo: now)
+        return Info(id: g.id, result: g.result, opponent: g.opponent, rating: g.opponentRating,
+                    line: "\(shortFamily(g.family)) · \(g.timeClass.capitalized) · \(when)",
+                    brilliant: b, great: gr, blunders: bl,
+                    accuracy: reviewed ? g.userAccuracy : nil, reviewed: reviewed,
+                    endTime: g.endTime, color: g.userColor, timeClass: g.timeClass)
+    }
+
     /// "Caro-Kann Defense" → "Caro-Kann", "Italian Game" → "Italian".
     static func shortFamily(_ f: String) -> String {
         for suffix in [" Defense", " Opening", " Game"] where f.hasSuffix(suffix) && f.count > suffix.count + 2 {
@@ -386,8 +420,7 @@ private struct ProgressRingSmall: View {
 
 private struct GameRowView: View {
     let info: GamesCache.Info
-    let reviewing: Bool
-    let progress: Double
+    let live: ReviewStatus
 
     var body: some View {
         HStack(spacing: 12) {
@@ -408,7 +441,11 @@ private struct GameRowView: View {
                 }
             }
             Spacer(minLength: 6)
-            accuracy.frame(minWidth: 54, alignment: .trailing)
+            // Only this corner follows the reviewer's progress.
+            ReviewStatusReader(status: live) { l in
+                accuracy(reviewing: l.reviewingID == info.id, progress: l.reviewingID == info.id ? l.progress : 0)
+            }
+            .frame(minWidth: 54, alignment: .trailing)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
         .background(BC.card, in: RoundedRectangle(cornerRadius: BC.rRow, style: .continuous))
@@ -418,7 +455,7 @@ private struct GameRowView: View {
     }
 
     @ViewBuilder
-    private var accuracy: some View {
+    private func accuracy(reviewing: Bool, progress: Double) -> some View {
         if reviewing {
             ZStack {
                 Circle().stroke(Color.white.opacity(0.1), lineWidth: 3)

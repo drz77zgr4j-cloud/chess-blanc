@@ -102,29 +102,32 @@ final class AppModel: ObservableObject {
     let games = GameStore()
 
     init() {
-        Feel.prepare()
+        // Sounds and haptics are prepared after the first frame (see BlancChessApp), not here.
         games.windowMonths = progress.settings.historyMonths
         // Where your games leave your prep becomes a due move (GameStore doesn't know ProgressStore).
         let progress = self.progress
         games.onLeftPrep = { rep, node in progress.markDue(rep, node) }
     }
 
-    /// Loads the repertoires and opening book off the main thread.
+    /// Loads the repertoires and opening book off the main thread. The screens show as soon as the repertoires
+    /// and library index are in; the opening book (several MB) arrives a moment later.
     func load() async {
         guard !loaded else { return }
+        Task { [weak self] in
+            let b = await OpeningBook.load()   // decodes on its own background task
+            self?.book = b
+            self?.games.book = b
+        }
         async let reps = RepertoireLoader.loadAll()
-        async let book = OpeningBook.load()
         async let index = RepertoireLoader.loadIndex()
-        let (r, b, ix) = await (reps, book, index)
+        let (r, ix) = await (reps, index)
         library = ix
         for rep in r { packs[rep.id] = rep }
         for id in activeIDs where packs[id] == nil {
             if let p = await RepertoireLoader.load(id) { packs[id] = p }
         }
         repertoires = activeIDs.compactMap { packs[$0] }
-        self.book = b
         games.reps = r
-        games.book = b
         loaded = true
     }
 

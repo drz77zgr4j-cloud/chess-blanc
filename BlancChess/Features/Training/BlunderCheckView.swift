@@ -56,9 +56,11 @@ struct BlunderCheckView: View {
         .background(Spotlight(colour: BC.coral))
         .task {
             guard !loaded else { return }
-            guard Pro.shared.use(.blunderRounds) else { loaded = true; dismiss(); return }
+            guard Pro.shared.left(.blunderRounds) > 0 else { Pro.shared.paywall = .blunderRounds; loaded = true; dismiss(); return }
             let snap = await TrainingCache.shared.snapshot(store, app.repertoires)
             queue = Self.pick(snap.slips, progress)
+            // A round only counts when there was something to check.
+            if !queue.isEmpty { Pro.shared.use(.blunderRounds) }
             loaded = true
         }
     }

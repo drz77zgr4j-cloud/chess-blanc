@@ -1,7 +1,7 @@
 import SwiftUI
 import ChessKit
 
-/// Game Review, the chess.com way: a summary first (accuracy, graph, marks, opening), then one board to step through it.
+/// Game review: a summary first (accuracy, graph, marks, opening), then one board to step through it.
 struct GameReviewView: View {
     let gameID: String
     @EnvironmentObject var app: AppModel
@@ -80,9 +80,16 @@ struct GameReviewView: View {
             Task { await EngineService.shared.stop(owner: Self.owner) }
         }
         .onChange(of: store.revision) { _, _ in refreshData() }
-        .onChange(of: store.reviewingID) { _, now in
-            // If the queue was stopped elsewhere, ask again: this screen needs its review.
-            if now == nil, data?.ready == false, store.pendingReviews == 0 { store.reviewNow(gameID) }
+        // Follows the reviewer without redrawing this whole screen on every progress tick.
+        .background {
+            ReviewStatusReader(status: store.live) { live in
+                Color.clear.onChange(of: live.reviewingID) { _, now in
+                    // A review just landed (maybe this game's): show it now, not at the next revision.
+                    refreshData()
+                    // If the queue was stopped elsewhere, ask again: this screen needs its review.
+                    if now == nil, data?.ready == false, live.pending == 0 { store.reviewNow(gameID) }
+                }
+            }
         }
     }
 
@@ -161,8 +168,12 @@ struct GameReviewView: View {
     }
 
     private var pendingCard: some View {
-        let mine = store.reviewingID == gameID
-        let p = mine ? store.reviewProgress : 0
+        ReviewStatusReader(status: store.live) { live in pendingCard(live) }
+    }
+
+    private func pendingCard(_ live: ReviewStatus) -> some View {
+        let mine = live.reviewingID == gameID
+        let p = mine ? live.progress : 0
         return CardBox(padding: 16) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
