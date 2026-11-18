@@ -1,0 +1,145 @@
+[
+ {
+  "name": "header-3840x1646.png",
+  "size": [
+   3840,
+   1646
+  ],
+  "glows": [
+   {
+    "x": 300,
+    "y": 900,
+    "r": 900,
+    "c": "blue",
+    "a": 0.4
+   },
+   {
+    "x": 1300,
+    "y": 200,
+    "r": 900,
+    "c": "violet",
+    "a": 0.3
+   },
+   {
+    "x": 2100,
+    "y": 1000,
+    "r": 900,
+    "c": "green",
+    "a": 0.32
+   },
+   {
+    "x": 2900,
+    "y": 200,
+    "r": 900,
+    "c": "blue",
+    "a": 0.34
+   },
+   {
+    "x": 3700,
+    "y": 900,
+    "r": 900,
+    "c": "amber",
+    "a": 0.32
+   }
+  ],
+  "phones": [
+   {
+    "shot": "openings.png",
+    "screen_w": 760,
+    "cx": 520,
+    "top": 200,
+    "tilt": -8
+   },
+   {
+    "shot": "today.png",
+    "screen_w": 760,
+    "cx": 1220,
+    "top": 160,
+    "tilt": 7
+   },
+   {
+    "shot": "practice.png",
+    "screen_w": 760,
+    "cx": 1920,
+    "top": 140,
+    "tilt": -6
+   },
+   {
+    "shot": "insights.png",
+    "screen_w": 760,
+    "cx": 2620,
+    "top": 160,
+    "tilt": 7
+   },
+   {
+    "shot": "review.png",
+    "screen_w": 760,
+    "cx": 3320,
+    "top": 200,
+    "tilt": -8
+   }
+  ]
+ },
+ {
+  "name": "search-3840x2560.png",
+  "size": [
+   3840,
+   2560
+  ],
+  "glows": [
+   {
+    "x": 500,
+    "y": 700,
+    "r": 1100,
+    "c": "blue",
+    "a": 0.42
+   },
+   {
+    "x": 2600,
+    "y": 1600,
+    "r": 1200,
+    "c": "violet",
+    "a": 0.34
+   },
+   {
+    "x": 3500,
+    "y": 500,
+    "r": 1000,
+    "c": "blue",
+    "a": 0.3
+   }
+  ],
+  "phones": [
+   {
+    "shot": "today.png",
+    "screen_w": 880,
+    "cx": 2420,
+    "top": 420,
+    "tilt": -6
+   },
+   {
+    "shot": "practice.png",
+    "screen_w": 880,
+    "cx": 3080,
+    "top": 380,
+    "tilt": 6
+   },
+   {
+    "shot": "insights.png",
+    "screen_w": 880,
+    "cx": 3720,
+    "top": 420,
+    "tilt": -6
+   }
+  ],
+  "headline": "The modern way\nto learn chess.",
+  "tag": "Openings \u00b7 Reviews \u00b7 Analytics",
+  "text": {
+   "x": 260,
+   "y": 880,
+   "align": "left",
+   "size": 180,
+   "tag_size": 44
+  }
+ }
+]

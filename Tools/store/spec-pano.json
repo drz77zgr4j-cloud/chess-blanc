@@ -1,0 +1,237 @@
+[
+ {
+  "name": "01-today",
+  "shot": "today.png",
+  "headline": "The modern way\nto learn chess.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "blue",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "blue",
+    "a": 0.22
+   }
+  ],
+  "tilt": -5,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 220,
+  "tag": "The daily coach"
+ },
+ {
+  "name": "02-openings",
+  "shot": "openings.png",
+  "headline": "Every line.\nEvery reply.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "violet",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "violet",
+    "a": 0.22
+   }
+  ],
+  "tilt": 5,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 220,
+  "tag": "21 openings"
+ },
+ {
+  "name": "03-practice",
+  "shot": "practice.png",
+  "headline": "Openings that\nactually stick.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "blue",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "blue",
+    "a": 0.22
+   }
+  ],
+  "tilt": -5,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 220,
+  "tag": "Spaced repetition"
+ },
+ {
+  "name": "04-check",
+  "shot": "check.png",
+  "headline": "Stop hanging\npieces.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "coral",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "coral",
+    "a": 0.22
+   }
+  ],
+  "tilt": 5,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 220,
+  "tag": "Blunder check"
+ },
+ {
+  "name": "05-insights",
+  "shot": "insights.png",
+  "headline": "See exactly where\nyou lose points.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "coral",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "coral",
+    "a": 0.22
+   }
+  ],
+  "tilt": -5,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 220,
+  "tag": "Deep analytics"
+ },
+ {
+  "name": "06-review",
+  "shot": "review.png",
+  "headline": "Every game,\nreviewed.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "green",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "green",
+    "a": 0.22
+   }
+  ],
+  "tilt": 5,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 220,
+  "tag": "Stockfish 17"
+ },
+ {
+  "name": "07-bot",
+  "shot": "bot.png",
+  "headline": "A bot that plays\nyour opponents.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "violet",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "violet",
+    "a": 0.22
+   }
+  ],
+  "tilt": -5,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 220,
+  "tag": "Their real openings"
+ },
+ {
+  "name": "08-week",
+  "shot": "week.png",
+  "headline": "Watch yourself\nimprove.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "amber",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "amber",
+    "a": 0.22
+   }
+  ],
+  "tilt": 5,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 220,
+  "tag": "Weekly report"
+ },
+ {
+  "name": "09-games",
+  "shot": "puzzles.png",
+  "headline": "Learn from your\nown mistakes.",
+  "glows": [
+   {
+    "x": 880,
+    "y": 1500,
+    "r": 1000,
+    "c": "blue",
+    "a": 0.42
+   },
+   {
+    "x": 200,
+    "y": 300,
+    "r": 800,
+    "c": "blue",
+    "a": 0.22
+   }
+  ],
+  "tilt": 0,
+  "screen_w": 1200,
+  "py": 660,
+  "dx": 0,
+  "tag": "Free every day",
+  "ipad_dx": 0
+ }
+]

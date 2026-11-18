@@ -1,0 +1,372 @@
+[
+ {
+  "id": "w-queens-gambit",
+  "title": "Queen's Gambit",
+  "color": "w",
+  "family": "Queen's pawn",
+  "blurb": "Offer the c-pawn to pull Black away from d5.",
+  "setup": [
+   "d2d4",
+   "d7d5",
+   "c2c4"
+  ],
+  "setupSAN": "1.d4 d5 2.c4",
+  "fen": "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2",
+  "popularity": 0.05206,
+  "positions": 591,
+  "sizeKB": 139
+ },
+ {
+  "id": "w-italian",
+  "title": "Italian Game",
+  "color": "w",
+  "family": "Open games",
+  "blurb": "Bishop to c4, aiming at f7, then c3 and d4.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "g1f3",
+   "b8c6",
+   "f1c4"
+  ],
+  "setupSAN": "1.e4 e5 2.Nf3 Nc6 3.Bc4",
+  "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+  "popularity": 0.03474,
+  "positions": 746,
+  "sizeKB": 176
+ },
+ {
+  "id": "w-english",
+  "title": "English Opening",
+  "color": "w",
+  "family": "Flank",
+  "blurb": "Fight for d5 from the side with c4, Nc3, g3, Bg2.",
+  "setup": [
+   "c2c4"
+  ],
+  "setupSAN": "1.c4",
+  "fen": "rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq - 0 1",
+  "popularity": 0.02996,
+  "positions": 563,
+  "sizeKB": 132
+ },
+ {
+  "id": "w-kings-gambit",
+  "title": "King's Gambit",
+  "color": "w",
+  "family": "Open games",
+  "blurb": "Offer the f-pawn to open lines for an attack.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "f2f4"
+  ],
+  "setupSAN": "1.e4 e5 2.f4",
+  "fen": "rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PP/RNBQKBNR b KQkq - 0 2",
+  "popularity": 0.02652,
+  "positions": 596,
+  "sizeKB": 140
+ },
+ {
+  "id": "w-ruy-lopez",
+  "title": "Ruy Lopez",
+  "color": "w",
+  "family": "Open games",
+  "blurb": "Bishop to b5, pressuring the knight that guards e5.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "g1f3",
+   "b8c6",
+   "f1b5"
+  ],
+  "setupSAN": "1.e4 e5 2.Nf3 Nc6 3.Bb5",
+  "fen": "r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+  "popularity": 0.02638,
+  "positions": 725,
+  "sizeKB": 173
+ },
+ {
+  "id": "w-scotch",
+  "title": "Scotch Game",
+  "color": "w",
+  "family": "Open games",
+  "blurb": "Open the centre at once with d4.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "g1f3",
+   "b8c6",
+   "d2d4"
+  ],
+  "setupSAN": "1.e4 e5 2.Nf3 Nc6 3.d4",
+  "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq - 0 3",
+  "popularity": 0.01579,
+  "positions": 563,
+  "sizeKB": 134
+ },
+ {
+  "id": "w-london",
+  "title": "London System",
+  "color": "w",
+  "family": "Queen's pawn",
+  "blurb": "Bf4, e3, c3 and Nf3 against almost anything.",
+  "setup": [
+   "d2d4",
+   "d7d5",
+   "c1f4"
+  ],
+  "setupSAN": "1.d4 d5 2.Bf4",
+  "fen": "rnbqkbnr/ppp1pppp/8/3p4/3P1B2/8/PPP1PPPP/RN1QKBNR b KQkq - 1 2",
+  "popularity": 0.00976,
+  "positions": 310,
+  "sizeKB": 71
+ },
+ {
+  "id": "w-vienna",
+  "title": "Vienna Game",
+  "color": "w",
+  "family": "Open games",
+  "blurb": "Knight to c3 and bishop to c4, aiming at f7.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "b1c3"
+  ],
+  "setupSAN": "1.e4 e5 2.Nc3",
+  "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2",
+  "popularity": 0.00821,
+  "positions": 510,
+  "sizeKB": 121
+ },
+ {
+  "id": "w-danish-gambit",
+  "title": "Danish Gambit",
+  "color": "w",
+  "family": "Open games",
+  "blurb": "Give two pawns for a fast attack with both bishops.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "d2d4",
+   "e5d4",
+   "c2c3"
+  ],
+  "setupSAN": "1.e4 e5 2.d4 exd4 3.c3",
+  "fen": "rnbqkbnr/pppp1ppp/8/8/3pP3/2P5/PP3PPP/RNBQKBNR b KQkq - 0 3",
+  "popularity": 0.00428,
+  "positions": 484,
+  "sizeKB": 115
+ },
+ {
+  "id": "w-evans-gambit",
+  "title": "Evans Gambit",
+  "color": "w",
+  "family": "Open games",
+  "blurb": "Give the b-pawn to gain time for c3 and d4.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "g1f3",
+   "b8c6",
+   "f1c4",
+   "f8c5",
+   "b2b4"
+  ],
+  "setupSAN": "1.e4 e5 2.Nf3 Nc6 3.Bc4 Bc5 4.b4",
+  "fen": "r1bqk1nr/pppp1ppp/2n5/2b1p3/1PB1P3/5N2/P1PP1PPP/RNBQK2R b KQkq - 0 4",
+  "popularity": 0.00075,
+  "positions": 766,
+  "sizeKB": 181
+ },
+ {
+  "id": "b-sicilian",
+  "title": "Sicilian Defence",
+  "color": "b",
+  "family": "Vs 1.e4",
+  "blurb": "Meet 1.e4 with ...c5 and fight for d4.",
+  "setup": [
+   "e2e4",
+   "c7c5"
+  ],
+  "setupSAN": "1.e4 c5",
+  "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+  "popularity": 0.18156,
+  "positions": 679,
+  "sizeKB": 159
+ },
+ {
+  "id": "b-open-game",
+  "title": "Open Game (…e5)",
+  "color": "b",
+  "family": "Vs 1.e4",
+  "blurb": "Classical 1...e5 and 2...Nc6 against everything.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "g1f3",
+   "b8c6"
+  ],
+  "setupSAN": "1.e4 e5 2.Nf3 Nc6",
+  "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+  "popularity": 0.1498,
+  "positions": 631,
+  "sizeKB": 152
+ },
+ {
+  "id": "b-french",
+  "title": "French Defence",
+  "color": "b",
+  "family": "Vs 1.e4",
+  "blurb": "...e6 and ...d5: a solid centre, then hit it with ...c5.",
+  "setup": [
+   "e2e4",
+   "e7e6"
+  ],
+  "setupSAN": "1.e4 e6",
+  "fen": "rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+  "popularity": 0.11421,
+  "positions": 678,
+  "sizeKB": 158
+ },
+ {
+  "id": "b-scandinavian",
+  "title": "Scandinavian Defence",
+  "color": "b",
+  "family": "Vs 1.e4",
+  "blurb": "Hit e4 at once with ...d5 and take back with the queen.",
+  "setup": [
+   "e2e4",
+   "d7d5"
+  ],
+  "setupSAN": "1.e4 d5",
+  "fen": "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+  "popularity": 0.07522,
+  "positions": 273,
+  "sizeKB": 63
+ },
+ {
+  "id": "b-qgd",
+  "title": "Queen's Gambit Declined",
+  "color": "b",
+  "family": "Vs 1.d4",
+  "blurb": "Hold d5 with ...e6 and keep the centre solid.",
+  "setup": [
+   "d2d4",
+   "d7d5",
+   "c2c4",
+   "e7e6"
+  ],
+  "setupSAN": "1.d4 d5 2.c4 e6",
+  "fen": "rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",
+  "popularity": 0.05543,
+  "positions": 381,
+  "sizeKB": 90
+ },
+ {
+  "id": "b-slav",
+  "title": "Slav Defence",
+  "color": "b",
+  "family": "Vs 1.d4",
+  "blurb": "Hold d5 with ...c6 and keep the light bishop free.",
+  "setup": [
+   "d2d4",
+   "d7d5",
+   "c2c4",
+   "c7c6"
+  ],
+  "setupSAN": "1.d4 d5 2.c4 c6",
+  "fen": "rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",
+  "popularity": 0.04689,
+  "positions": 329,
+  "sizeKB": 78
+ },
+ {
+  "id": "b-pirc",
+  "title": "Pirc Defence",
+  "color": "b",
+  "family": "Vs 1.e4",
+  "blurb": "...d6, ...Nf6, ...g6 and ...Bg7: hit the centre later.",
+  "setup": [
+   "e2e4",
+   "d7d6"
+  ],
+  "setupSAN": "1.e4 d6",
+  "fen": "rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+  "popularity": 0.03182,
+  "positions": 442,
+  "sizeKB": 101
+ },
+ {
+  "id": "b-kings-indian",
+  "title": "King's Indian Defence",
+  "color": "b",
+  "family": "Vs 1.d4",
+  "blurb": "Let White build a centre, then strike with ...e5.",
+  "setup": [
+   "d2d4",
+   "g8f6",
+   "c2c4",
+   "g7g6"
+  ],
+  "setupSAN": "1.d4 Nf6 2.c4 g6",
+  "fen": "rnbqkb1r/pppppp1p/5np1/8/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3",
+  "popularity": 0.02492,
+  "positions": 356,
+  "sizeKB": 84
+ },
+ {
+  "id": "b-petrov",
+  "title": "Petrov Defence",
+  "color": "b",
+  "family": "Vs 1.e4",
+  "blurb": "Answer 2.Nf3 by attacking e4 with ...Nf6.",
+  "setup": [
+   "e2e4",
+   "e7e5",
+   "g1f3",
+   "g8f6"
+  ],
+  "setupSAN": "1.e4 e5 2.Nf3 Nf6",
+  "fen": "rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+  "popularity": 0.02167,
+  "positions": 424,
+  "sizeKB": 100
+ },
+ {
+  "id": "b-dutch",
+  "title": "Dutch Defence",
+  "color": "b",
+  "family": "Vs 1.d4",
+  "blurb": "...f5 to grab e4, then ...Nf6, ...e6, ...Be7, ...O-O.",
+  "setup": [
+   "d2d4",
+   "f7f5"
+  ],
+  "setupSAN": "1.d4 f5",
+  "fen": "rnbqkbnr/ppppp1pp/8/5p2/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 0 2",
+  "popularity": 0.01939,
+  "positions": 220,
+  "sizeKB": 51
+ },
+ {
+  "id": "b-nimzo-indian",
+  "title": "Nimzo-Indian Defence",
+  "color": "b",
+  "family": "Vs 1.d4",
+  "blurb": "Pin the c3 knight with ...Bb4 to control e4.",
+  "setup": [
+   "d2d4",
+   "g8f6",
+   "c2c4",
+   "e7e6",
+   "b1c3",
+   "f8b4"
+  ],
+  "setupSAN": "1.d4 Nf6 2.c4 e6 3.Nc3 Bb4",
+  "fen": "rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4",
+  "popularity": 0.01167,
+  "positions": 342,
+  "sizeKB": 80
+ }
+]

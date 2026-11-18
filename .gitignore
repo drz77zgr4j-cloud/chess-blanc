@@ -1,0 +1,11 @@
+# Stockfish network files (78 MB) — fetch with Tools/fetch_networks.sh
+*.xcuserstate
+.DS_Store
+.derived/
+BlancChess/Engine/*.nnue
+DerivedData/
+Tools/.explorer-cache.json
+xcuserdata/
+Tools/.venv/
+.claude/
+StoreAssets/
